@@ -1,0 +1,6 @@
+{
+  "id": "github-gist",
+  "name": "GitHub Gist 备份",
+  "version": "1.0.0",
+  "description": "笔记库一键备份到 GitHub Gist 并随时恢复（保留目录结构，远端删除可同步）"
+}

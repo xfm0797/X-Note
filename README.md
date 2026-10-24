@@ -1,0 +1,233 @@
+# X-Note 笔记
+
+本地优先的 Windows 桌面端 Markdown 笔记软件。笔记即标准 .md 文件，离线可用、隐私无忧。
+
+- **技术栈**：Tauri 2（Rust 外壳 + fs/dialog/shell 插件）+ React 18 + TypeScript + Vite
+- **体积**：桌面安装包仅约数 MB（Rust 内核 + 系统 WebView2，无内嵌浏览器）
+- **开发者**：[XFM](https://www.lovou.pw) · GitHub [@xfm0797](https://github.com/xfm0797)
+- **核心特性**：Markdown 实时预览、本地笔记库与文件树、全文搜索、文档大纲、自动保存、导入/导出（PDF/HTML/MD）、亮/暗主题、设置面板、KaTeX 数学公式、Mermaid 流程图、双向链接 `[[笔记]]`、反链面板、关系图谱、标签分类、拖拽排序、插件系统（内置云同步插件【WebDAV / 本地镜像 / Git 后端 + 冲突解决面板】+ 外部插件目录动态加载，含 GitHub / Gitee Gist 备份官方插件与 hello-world 开发样板及开发文档）、多窗口、版本历史与 diff 对比、多窗口布局记忆、标签页（可拖拽排序）、编辑器增强、关于（开发者 XFM）
+
+## 一、两种运行模式
+
+本项目前端用 Web 技术（React）实现，通过 Tauri 套上 Windows 桌面外壳：
+
+| 模式 | 说明 | 数据存储 |
+| ---- | ---- | -------- |
+| 桌面端（Tauri） | 真实 Windows 应用，读写你选择的本地文件夹 | 真实 .md 文件 |
+| 浏览器预览（Web） | 在浏览器中直接运行，用于开发验证 | 浏览器 localStorage（内置示例笔记） |
+
+前端代码完全复用，两套环境的差异仅由 `src/lib/storage.ts` 这一个抽象层隔离。
+
+## 二、开发 / 浏览器预览
+
+```bash
+npm install
+npm run dev        # 启动 Vite dev server，浏览器打开 http://localhost:5173
+# 或
+npm run preview    # 预览生产构建（dist）
+```
+
+浏览器模式下会自动加载一组示例笔记，所有功能（编辑、预览、文件树、搜索、导出、主题）均可完整交互。
+
+## 三、打包 Windows 桌面应用
+
+### 前置依赖（在 Windows 上）
+
+- Node.js ≥ 18
+- Rust 工具链（含 cargo）
+- WebView2 运行时（Win11 已内置；Win10 需安装）
+
+### 构建命令
+
+```bash
+npm install
+npm run tauri:dev     # 开发模式，热重载，弹出水桌面窗口
+npm run tauri:build   # 生产构建，生成安装包
+```
+
+构建完成后，安装包位于：
+
+```
+src-tauri/target/release/bundle/
+├── nsis/X-Note_0.1.0_x64_zh-CN.exe   # Windows 安装程序（NSIS）
+└── msi/X-Note_0.1.0_x64_en-US.msi    # MSI 安装包
+```
+
+首次构建前，若图标缺失，可运行 `npm run tauri icon` 由源图 `src-tauri/icons/icon.png` 重新生成各平台图标。
+
+说明：最终 .exe/.msi 建议在 Windows 机器或 Windows CI（GitHub Actions）上构建，结果最稳妥。
+
+### 方式二：GitHub Actions 自动出包（推荐）
+
+仓库已内置 `.github/workflows/release.yml`，推送到 GitHub 后自动执行：
+
+| 触发方式 | 行为 |
+| -------- | ---- |
+| 推送 `v*` 标签（如 `git tag v0.1.0 && git push origin v0.1.0`） | 在 Windows runner 上构建 .exe(NSIS) 与 .msi，上传 Artifact 并自动创建 GitHub Release 附带安装包 |
+| Actions 页手动 Run workflow | 仅构建并上传 Artifact，用于验证出包流程 |
+
+工作流步骤：Checkout → Node 20 → Rust stable → cargo 缓存 → `npm ci` → `npm run tauri:build` → 上传产物 →（标签时）发布 Release。无需额外 secret（Release 使用内置 GITHUB_TOKEN）。
+
+## 四、项目结构
+
+```
+X-Note/
+├── index.html
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── src/
+│   ├── main.tsx                 # 入口
+│   ├── App.tsx                  # 主逻辑（状态、自动保存、搜索、主题、导入导出、插件宿主接入）
+│   ├── types.ts                 # 全局类型
+│   ├── styles/global.css        # 主题变量、布局、Markdown 排版、代码高亮配色
+│   ├── lib/
+│   │   ├── storage.ts           # 存储抽象层（Tauri 真实文件 / Web localStorage）
+│   │   ├── markdown.ts          # Markdown 渲染（marked + DOMPurify + KaTeX + 双向链接扩展）+ 大纲/标签提取
+│   │   ├── export.ts            # 导入/导出（MD / HTML / PDF，含公式与流程图）
+│   │   ├── tree.ts              # 树操作纯函数（标签过滤、重排、排序清单）
+│   │   ├── history.ts           # 版本历史（快照记录/预算裁剪，Web 与 Tauri 双后端）
+│   │   ├── diff.ts              # 行级 diff（LCS + 粗粒度回退，纯函数可单测）
+│   │   ├── editorFmt.ts         # 编辑器格式化纯函数（加粗/标题/列表/链接/续写/字数统计）
+│   │   ├── tabs.ts              # 标签页顺序操作（moveTab 纯函数）
+│   │   ├── assets.ts            # 图片资源保存（Tauri 写 assets/，Web 转 dataURL）
+│   │   └── window.ts            # 多窗口（URL 参数打开指定笔记并继承布局）
+│   ├── plugins/                 # 插件系统
+│   │   ├── types.ts             # 插件契约（PluginContext / XNotePlugin / Command / SettingsPanel）
+│   │   ├── host.ts              # 插件宿主（注册表 + UI API + 命令归属跟踪）
+│   │   ├── registry.ts          # 内置插件注册表
+│   │   ├── external.ts          # 外部插件目录动态加载（.xnote-plugins/ + Blob URL import）
+│   │   └── cloud-sync/          # 云同步插件
+│   │       ├── index.tsx        # 插件入口：「同步」命令 + 设置面板（含冲突面板接线）
+│   │       ├── sync.ts          # 同步引擎（决策/冲突收集/裁决应用，纯函数可单测）
+│   │       ├── ConflictModal.tsx # 冲突解决面板（本地版/远端版/都保留）
+│   │       └── providers/       # webdav.ts / localFolder.ts / git.ts
+│   └── components/
+│       ├── Topbar.tsx           # 顶栏（视图切换、导出、主题、设置、插件命令、图谱、侧栏折叠、关于）
+│       ├── Sidebar.tsx          # 侧边栏（库名、搜索、文件树、标签、大纲、反链）
+│       ├── FileTree.tsx         # 文件树（展开/选中/重命名/删除/拖拽排序）
+│       ├── TabBar.tsx           # 标签栏（多笔记标签，可拖拽排序）
+│       ├── Editor.tsx           # Markdown 编辑器（格式工具条、快捷键、列表续写、图片插入）
+│       ├── Preview.tsx          # 实时预览（代码高亮 + Mermaid + 双向链接）
+│       ├── GraphModal.tsx       # 关系图谱（力导引 SVG）
+│       ├── HistoryModal.tsx     # 版本历史面板（快照/查看/diff/恢复）
+│       ├── AboutModal.tsx       # 关于对话框
+│       └── SettingsModal.tsx    # 设置面板（含插件设置分区与外部插件管理）
+└── src-tauri/                   # Tauri 桌面端外壳（Rust）
+    ├── Cargo.toml
+    ├── tauri.conf.json
+    ├── capabilities/default.json
+    ├── build.rs
+    ├── src/main.rs
+    └── icons/
+xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist / hello-world + 开发文档）
+.github/workflows/release.yml    # Windows CI：自动构建 .exe/.msi 并发布 Release
+```
+
+## 五、功能清单
+
+- [x] Markdown 编辑 + 实时预览（分屏 / 单栏编辑 / 单栏预览 三种视图可切换）
+- [x] 本地笔记库：选择文件夹为库，侧边栏多级文件树
+- [x] 笔记管理：新建 / 重命名 / 删除 / 移动（拖拽排序）
+- [x] 自动保存（编辑即存，状态栏显示「保存中 / 已保存」）
+- [x] 全文搜索（标题 + 正文，结果可点击跳转）
+- [x] 文档大纲（标题导航，点击定位）
+- [x] 导入（.md 拖入窗口 / 放入库目录）/ 导出（PDF / HTML / .md）
+- [x] 亮 / 暗主题（可设为跟随系统）
+- [x] 设置面板（主题、字号、默认导出格式、字体）
+- [x] 数学公式（KaTeX）：行内 `$E=mc^2$`，块级 `$$...$$`
+- [x] 流程图（Mermaid）：```mermaid 代码块自动渲染为图
+- [x] 双向链接：`[[笔记名]]` 或 `[[笔记名|别名]]`，点击跳转到同名笔记
+- [x] 反链面板：侧边栏展示引用当前笔记的全部笔记（含上下文片段、计数徽标；自引用自动过滤）
+- [x] 关系图谱：顶栏「图谱」打开全库关系图（基于 `[[链接]]`，力导引布局）；节点大小随连接数增长，当前笔记及邻居高亮、孤立笔记灰色；滚轮缩放、节点拖拽、单击跳转
+- [x] 标签分类：正文 `#标签` 自动汇总，侧边栏点击按标签筛选（支持中文标签；标题行与代码块内不识别）
+- [x] 拖拽排序 / 移动：文件树内拖拽重排顺序、拖入文件夹；顺序持久化，重启保持一致
+- [x] 插件系统：内置注册式插件宿主，插件可注册顶栏命令、设置面板，访问存储/设置/UI 提示能力
+- [x] 云同步插件：WebDAV / 本地文件夹镜像 / Git 三种后端；冲突面板逐项裁决（保留本地版 / 远端版 / 都保留），不再静默覆盖
+- [x] 多窗口：顶栏「新窗」在当前笔记的独立窗口中打开，URL 参数定位笔记
+- [x] 多窗口布局记忆：侧栏可折叠、可拖拽调宽（180–480px），布局随设置持久化并经 URL 参数传给新窗口
+- [x] 版本历史：每次自动保存前将旧内容存为快照（单篇上限 30 个、总预算自动淘汰）；「历史」可查看、预览并恢复
+- [x] 版本 diff 对比：「对比当前」做行级对比（LCS，超大文本自动降级粗粒度），新增绿色 / 删除红色并统计增删行数
+- [x] 标签页：多笔记标签、点击切换、✕ 关闭；状态按窗口记忆（sessionStorage）+ 全局回退（localStorage）；重命名/移动/删除时同步
+- [x] 标签页拖拽排序：拖拽调整顺序，顺序随标签状态持久化
+- [x] 外部插件目录动态加载：`.xnote-plugins/` 每个子目录一个插件（plugin.json + main.js，ESM default 导出），Blob URL 动态 import；单插件损坏不影响其他；「设置 → 外部插件」查看状态 / 重载 / 移除 / 一键停用
+- [x] 官方外部插件：GitHub / Gitee Gist 备份 + hello-world 样板（`xnote-external-plugins/`）
+- [x] 关于：顶栏「关于」展示软件信息与开发者 XFM 主页（www.lovou.pw）与 GitHub（@xfm0797）
+- [x] 编辑器增强：
+  - 格式工具条：加粗 / 斜体 / 删除线 / 行内代码 / H1–H3 / 链接 / 无序·有序·任务列表 / 引用 / 代码块
+  - 快捷键：Ctrl+B 加粗、Ctrl+I 斜体、Tab 两空格缩进
+  - Enter 智能续写：无序 / 有序（编号自动 +1）/ 任务 / 引用自动续行，空项再按 Enter 退出
+  - 图片插入：粘贴或拖入图片自动存入 assets/（Tauri）或转 dataURL（Web，限 512KB）
+  - 状态栏实时显示 行/列 与 字数/词数（中文按字、英文按词）
+
+### 语法速查
+
+| 语法 | 写法 | 说明 |
+| ---- | ---- | ---- |
+| 行内公式 | `$a^2+b^2=c^2$` | KaTeX 渲染 |
+| 块级公式 | `$$ \int_a^b f(x)dx $$` | 独立成行居中 |
+| 流程图 | ` ```mermaid ` + graph TD … | 自动渲染为矢量图 |
+| 双向链接 | `[[笔记名]]` / `[[笔记名\|别名]]` | 按文件名（去 .md）匹配跳转 |
+| 标签 | `#标签` | 正文任意位置；标题行与代码块内不识别 |
+| 拖拽 | 鼠标拖拽文件树节点 | 拖到文件夹=移入；拖到文件=前插重排 |
+
+### 编辑器快捷键
+
+| 按键 | 作用 |
+| ---- | ---- |
+| Ctrl+B / Ctrl+I | 加粗 / 斜体 |
+| Tab | 插入两空格缩进 |
+| Enter | 列表 / 任务 / 引用自动续写（空项再按退出） |
+| 粘贴 / 拖入图片 | 自动存入 assets/ 并插入 `![]()` |
+
+## 六、插件系统
+
+插件契约：
+
+```ts
+interface XNotePlugin {
+  manifest: { id: string; name: string; version: string; description?: string }
+  activate(ctx: PluginContext): void | Promise<void>
+  deactivate?(ctx: PluginContext): void
+}
+```
+
+`PluginContext` 四类能力：`ctx.storage`（读写笔记库）、`ctx.settings`（独立设置，按 key 命名空间隔离）、`ctx.ui`（registerCommand / registerSettingsPanel / showToast）、`ctx.log`。
+
+### 云同步插件
+
+- **多后端抽象**：`SyncProvider` 接口统一 `list / pull / push / remove / test`（含可选 afterSync 收尾钩子）
+  - WebDAV：Nextcloud / 群晖等
+  - 本地文件夹镜像：Web 预览模式用 localStorage 模拟远端
+  - Git 仓库：笔记库即工作树，fetch 远端后逐文件比对，本地改动统一 add/commit/push（仅桌面端，需 git）
+- 同步引擎单文件决策为纯函数（可单测）；冲突弹面板逐项选择「保留本地版 / 保留远端版 / 都保留」（本地版另存为 `xxx.conflict.md`）
+- 使用：顶栏「同步」一键同步；冲突时引导至「设置 → 云同步」裁决
+
+### 外部插件目录（动态加载）
+
+```
+<笔记库>/.xnote-plugins/
+└── my-plugin/
+    ├── plugin.json     # { id, name, version, description?, main? }
+    └── main.js         # ESM，default 导出插件对象
+```
+
+启动与「重载插件目录」时自动扫描加载；单个插件损坏只影响自身，错误展示在「设置 → 外部插件」。安全提示：外部插件以应用的完整权限执行代码，请仅安装信任来源的插件。
+
+在外部插件中构建设置面板：不能 import 'react'，宿主把 React 挂在 `window.XNoteReact` 上，用 `createElement` + hooks 即可。
+
+## 七、数据说明
+
+- **桌面端**：所有笔记是笔记库文件夹中的标准 .md 文件。辅助数据（均以 `.` 开头）：
+  - `.xnote-order.json`：文件树排序清单
+  - `.xnote-history/`：版本历史快照（每篇一个 JSON，单篇上限 30 个）
+  - `assets/`：粘贴 / 拖入的图片
+  - `.xnote-plugins/`：外部插件目录
+- **浏览器预览模式**：数据保存在 localStorage，仅用于演示
+- **多窗口**：新窗口 URL 参数 `?note=路径&view=视图&sidebar=侧栏&sw=侧栏宽度`
+- **标签页**：sessionStorage（`xnote:tabs:session`）+ localStorage（`xnote:tabs:last`）
+- **插件配置**：localStorage（`xnote:plugin:<键>`）
+
+### 后续可扩展
+
+更多同步后端（对象存储等）/ 外部插件市场与签名校验 / 标签页拖拽到窗口外分离 / 历史版本两两对比。
