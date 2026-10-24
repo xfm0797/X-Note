@@ -5,10 +5,6 @@ description = "X-Note 笔记 - 本地优先的 Markdown 笔记软件"
 authors = ["XFM <https://www.lovou.pw>"]
 edition = "2021"
 
-[lib]
-name = "xnote_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
