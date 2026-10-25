@@ -99,10 +99,10 @@ export function PluginsModal(p: Props) {
       <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-title">插件中心</div>
 
-        {p.panels.length > 0 && (
+        {p.panels.filter(x => x.id !== 'cloudSync').length > 0 && (
           <div className="settings-section">
             <div className="section-title">插件设置</div>
-            {p.panels.map(panel => (
+            {p.panels.filter(x => x.id !== 'cloudSync').map(panel => (
               <div className="plugin-panel-wrap" key={panel.id}>
                 <div className="plugin-panel-title">{panel.title}</div>
                 {panel.render()}
