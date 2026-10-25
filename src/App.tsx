@@ -202,12 +202,16 @@ export default function App() {
     setStatus('saving')
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(async () => {
-      const old = savedContentRef.current[path] ?? ''
-      if (old !== content) await pushSnapshot(path, old) // 保存前快照旧内容
-      await storage.writeFile(path, content)
-      savedContentRef.current[path] = content
-      setLib(l => ({ ...l, [path]: { content, updated: Date.now() } }))
-      setStatus('saved')
+      try {
+        const old = savedContentRef.current[path] ?? ''
+        if (old !== content) await pushSnapshot(path, old) // 保存前快照旧内容（内部已容错）
+        await storage.writeFile(path, content)
+        savedContentRef.current[path] = content
+        setLib(l => ({ ...l, [path]: { content, updated: Date.now() } }))
+        setStatus('saved')
+      } catch (e) {
+        showToast(`保存失败：${String(e).replace(/^Error:\s*/, '')}`, 'error')
+      }
     }, 400)
   }, [])
 
@@ -306,17 +310,25 @@ export default function App() {
     })
   }, [])
 
-  const flushSave = useCallback(async () => {
+  /** 立即持久化所有未保存内容。返回是否全部成功（不抛出）。 */
+  const flushSave = useCallback(async (): Promise<boolean> => {
     if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null }
+    let ok = true
     // 立即持久化所有未保存内容
     for (const [p, m] of Object.entries(lib)) {
       if (savedContentRef.current[p] !== m.content) {
-        await pushSnapshot(p, savedContentRef.current[p] ?? '')
-        await storage.writeFile(p, m.content)
-        savedContentRef.current[p] = m.content
+        try {
+          await pushSnapshot(p, savedContentRef.current[p] ?? '')
+          await storage.writeFile(p, m.content)
+          savedContentRef.current[p] = m.content
+        } catch (e) {
+          ok = false
+          showToast(`保存失败：${String(e).replace(/^Error:\s*/, '')}`, 'error')
+        }
       }
     }
-    setStatus('saved')
+    if (ok) setStatus('saved')
+    return ok
   }, [lib])
 
   /* ---------- 手动保存（Ctrl+S）与全局快捷键、窗口关闭前落盘 ---------- */
@@ -331,7 +343,7 @@ export default function App() {
       const ctrl = e.ctrlKey || e.metaKey
       if (ctrl && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        void flushRef.current().then(() => appToast('已保存', 'success'))
+        void flushRef.current().then(ok => appToast(ok ? '已保存' : '保存失败（见错误提示）', ok ? 'success' : 'error'))
       } else if (ctrl && e.key.toLowerCase() === 'n') {
         e.preventDefault(); opsRef.current.newNote()
       } else if (ctrl && e.key.toLowerCase() === 'f') {
@@ -352,7 +364,8 @@ export default function App() {
           const { getCurrentWindow } = await import('@tauri-apps/api/window')
           const un = await getCurrentWindow().onCloseRequested(async (e) => {
             e.preventDefault()          // 先拦截关闭
-            await flushRef.current()    // 落盘未保存内容
+            const ok = await flushRef.current() // 落盘未保存内容
+            if (!ok) { appToast('保存失败，已取消关闭以避免丢失内容', 'error'); return }
             getCurrentWindow().destroy() // 再真正关闭
           })
           unlisten = un
@@ -603,7 +616,7 @@ export default function App() {
         onNewNote={() => { void createNote(active ? active.split('/').slice(0, -1).join('/') : '') }}
         onImportFiles={importFiles}
         onOpenLibrary={onSelectFolder}
-        onSave={() => { void flushRef.current().then(() => appToast('已保存', 'success')) }}
+        onSave={() => { void flushRef.current().then(ok => appToast(ok ? '已保存' : '保存失败（见错误提示）', ok ? 'success' : 'error')) }}
         onEditOp={runEditOp}
         onFocusSearch={focusSearch}
         onGotoLine={() => { void gotoLine() }}

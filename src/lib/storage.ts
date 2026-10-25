@@ -133,7 +133,7 @@ export async function ensureLibraryDirs(): Promise<void> {
   if (!root) return
   try {
     const fs = await tauriFs()
-    for (const dir of ['.xnote-plugins', 'assets']) {
+    for (const dir of ['.xnote-plugins', 'assets', '.xnote-history']) {
       try { await fs.mkdir(`${root}/${dir}`, { recursive: true }) } catch { /* 已存在 */ }
     }
   } catch { /* fs 不可用时忽略 */ }
@@ -179,7 +179,7 @@ export const storage = {
   async writeFile(path: string, content: string): Promise<void> {
     if (isTauri()) {
       const root = await getLibraryRoot()
-      if (!root) return
+      if (!root) throw new Error('未选择笔记库，请先通过 文件 → 打开笔记库 选择文件夹')
       const fs = await tauriFs()
       const full = `${root}/${path}`
       const dir = full.slice(0, full.lastIndexOf('/'))
