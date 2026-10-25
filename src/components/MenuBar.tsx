@@ -120,13 +120,12 @@ export function MenuBar(p: Props) {
         {p.pluginCommands.map(c => item(c.title, c.run))}
         <div className="dropdown-sep" />
         {item('插件中心…', p.onOpenPlugins)}
-        {item('云同步面板…', p.onOpenSync)}
+        {item('同步…', p.onOpenSync)}
       </>)}
 
       {/* ── 设置 ── */}
       {menu('设置', <>
         {item('设置…', p.onOpenSettings)}
-        {item('同步…', p.onOpenSync)}
         {item('切换主题（当前：' + (p.theme === 'dark' ? '深色' : '浅色') + '）', p.onToggleTheme)}
         <div className="dropdown-sep" />
         {item('关于 X-Note…', p.onOpenAbout)}
