@@ -17,12 +17,25 @@ interface Props {
   panels: PluginSettingsPanel[]
   onReloadExternal(): void
   onClose(): void
+  /** 打开时定位到指定区块（'sync' → 滚动到云同步面板） */
+  initialSection?: 'sync'
 }
 
 export function SettingsModal(p: Props) {
   const [extList, setExtList] = useState<ExternalPluginEntry[] | null>(null)
   const [extBusy, setExtBusy] = useState(false)
   const [pluginDir, setPluginDir] = useState<string>('')
+
+  // 定位到指定区块（如菜单「设置 → 同步」直接滚到云同步面板）
+  useEffect(() => {
+    if (p.initialSection !== 'sync') return
+    const t = setTimeout(() => {
+      const el = [...document.querySelectorAll('.plugin-panel-title')]
+        .find(e => (e.textContent || '').includes('云同步'))
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+    return () => clearTimeout(t)
+  }, [p.initialSection])
 
   // .zip 安装
   const zipInputRef = useRef<HTMLInputElement>(null)

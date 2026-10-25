@@ -7,7 +7,7 @@ import { extractOutline, extractTags, buildBacklinks, extractWikiTargets, render
 import { countWords } from './lib/editorFmt'
 import { pushSnapshot, listSnapshots } from './lib/history'
 import { doExport } from './lib/export'
-import { openNoteWindow, windowParams } from './lib/window'
+import { windowParams } from './lib/window'
 import { Topbar } from './components/Topbar'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
@@ -48,7 +48,7 @@ export default function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
   const [status, setStatus] = useState<'saved' | 'saving'>('saved')
-  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'about'>('none')
+  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'about'>('none')
   const [scrollTarget, setScrollTarget] = useState<string | null>(null)
   const [, forceRender] = useState(0)
   // 插件
@@ -518,11 +518,9 @@ export default function App() {
         onOpenGraph={() => setModal('graph')}
         onOpenHistory={openHistory}
         onOpenSettings={() => setModal('settings')}
+        onOpenSync={() => setModal('sync')}
         onOpenAbout={() => setModal('about')}
-        onNewWindow={() => active && openNoteWindow({
-          note: active, view: settings.view,
-          sidebar: settings.sidebarVisible ? '1' : '0', sw: String(settings.sidebarWidth)
-        })}
+        onCreateNote={() => createNote(active ? active.split('/').slice(0, -1).join('/') : '')}
         onSelectFolder={onSelectFolder}
         onSave={() => { void flushRef.current().then(() => appToast('已保存', 'success')) }}
         saving={status === 'saving'}
@@ -627,13 +625,14 @@ export default function App() {
           onClose={() => setModal('none')}
         />
       )}
-      {modal === 'settings' && (
+      {(modal === 'settings' || modal === 'sync') && (
         <SettingsModal
           settings={settings}
           onChange={patchSettings}
           panels={pluginPanels}
           onReloadExternal={reloadExternal}
           onClose={() => setModal('none')}
+          initialSection={modal === 'sync' ? 'sync' : undefined}
         />
       )}
       {modal === 'about' && <AboutModal onClose={() => setModal('none')} />}

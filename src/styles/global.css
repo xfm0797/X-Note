@@ -85,6 +85,8 @@ button { font-family: inherit; }
 .dropdown-wrap:hover .dropdown-menu { display: block; }
 .dropdown-menu div { padding: 7px 12px; cursor: pointer; border-radius: 6px; white-space: nowrap; }
 .dropdown-menu div:hover { background: var(--bg-hover); }
+.dropdown-menu div.dropdown-sep { height: 1px; padding: 0; margin: 4px 6px; background: var(--border); cursor: default; }
+.dropdown-menu div.dropdown-sep:hover { background: var(--border); }
 
 /* ===== 主区 ===== */
 .main { flex: 1; display: flex; min-height: 0; }
