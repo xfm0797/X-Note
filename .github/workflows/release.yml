@@ -65,6 +65,7 @@ jobs:
       - name: Sync to Gitee (backup update CDN for mainland China)
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
+        continue-on-error: true   # GitHub Release 已发布，Gitee 备用路线失败不影响主发布
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: bash scripts/sync-gitee.sh "${{ github.ref_name }}"
