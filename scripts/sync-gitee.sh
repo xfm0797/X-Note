@@ -35,29 +35,32 @@ echo "Release ID: $RELEASE_ID"
 
 echo "==> 上传安装包 / 签名 / 更新清单"
 upload() { # $1=文件路径  $2=表单字段名
-  curl -s -X POST "${API}/releases/${RELEASE_ID}/attach_files?${AUTH}" \
-    -F "$2=@$1"
+  local RESP CODE
+  CODE=$(curl -s -o /tmp/gitee-upload-resp -w "%{http_code}" -X POST "${API}/releases/${RELEASE_ID}/attach_files?${AUTH}" -F "$2=@$1")
+  RESP=$(cat /tmp/gitee-upload-resp 2>/dev/null || true)
+  echo "    HTTP $CODE"
+  [ -n "$RESP" ] && echo "    响应: ${RESP:0:300}"
+  [ "$CODE" = "200" ] || [ "$CODE" = "201" ]
 }
 for f in "$EXE" "$SIG" "$CN"; do
   NAME=$(basename "$f")
-  echo "  - $NAME"
-  RESP=$(upload "$f" "files")
-  if echo "$RESP" | grep -qi '"message"'; then
-    echo "  字段名 files 失败，改用 files[] 重试：$RESP"
-    RESP=$(upload "$f" "files[]")
-    echo "$RESP" | grep -qi '"message"' && { echo "  上传失败: $NAME ($RESP)"; exit 1; }
+  echo "  - $NAME (字段名 files)"
+  if upload "$f" "files"; then
+    echo "    OK"
   else
-    echo "  OK"
+    echo "    字段名 files 失败，改用 files[] 重试"
+    upload "$f" "files[]" || { echo "  上传失败: $NAME"; exit 1; }
   fi
 done
 
 echo "==> 校验 Release 资产"
-curl -s "${API}/releases/${RELEASE_ID}?${AUTH}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);(j.assets||[]).forEach(a=>console.log('  *',a.name,a.size+'B'))})"
+curl -s "${API}/releases/${RELEASE_ID}?${AUTH}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const a=j.assets||[];console.log('  附件数:',a.length);a.forEach(x=>console.log('  *',x.name,x.size||''))})"
 
-echo "==> 将 latest-cn.json 提交到 main（Gitee raw 端点使用）"
+echo "==> 将 latest-cn.json 提交到仓库根（Gitee raw 端点使用）"
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
-git add "$CN"
+cp "$CN" latest-cn.json
+git add latest-cn.json
 if git diff --cached --quiet; then
   echo "  无变更，跳过提交"
 else

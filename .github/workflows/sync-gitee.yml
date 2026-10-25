@@ -1,0 +1,40 @@
+name: Sync Gitee (re-run backup CDN sync only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要同步的标签（例：v0.2.1）'
+        required: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download installers from GitHub Release
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          mkdir -p src-tauri/target/release/bundle/nsis
+          BASE="https://github.com/xfm0797/X-Note/releases/download/${TAG}"
+          EXE=$(curl -s "https://api.github.com/repos/xfm0797/X-Note/releases/tags/${TAG}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const a=(j.assets||[]).find(x=>x.name.endsWith('-setup.exe'));console.log(a?a.name:'')})")
+          [ -n "$EXE" ] || { echo "Release 中未找到 setup.exe"; exit 1; }
+          curl -fL -o "src-tauri/target/release/bundle/nsis/${EXE}" "${BASE}/${EXE}"
+          curl -fL -o "src-tauri/target/release/bundle/nsis/${EXE}.sig" "${BASE}/${EXE}.sig"
+          ls -l src-tauri/target/release/bundle/nsis/
+
+      - name: Generate manifests
+        shell: bash
+        run: node scripts/gen-latest.mjs "${{ inputs.tag }}"
+
+      - name: Sync to Gitee
+        shell: bash
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: bash scripts/sync-gitee.sh "${{ inputs.tag }}"
