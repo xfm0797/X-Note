@@ -76,6 +76,12 @@ button { font-family: inherit; }
 }
 .view-switch button.active { background: var(--accent); color: var(--accent-text); }
 
+/* ===== 常用工具栏（菜单栏下方） ===== */
+.toolbar { gap: 2px; padding: 3px 10px; }
+.toolbar .tb-btn { display: flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 4px 9px; white-space: nowrap; }
+.toolbar .tb-btn[disabled] { opacity: .5; cursor: default; }
+.tb-sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+
 .dropdown-wrap { position: relative; }
 .dropdown-menu {
   display: none; position: absolute; top: 100%; left: 0; min-width: 200px; z-index: 60;

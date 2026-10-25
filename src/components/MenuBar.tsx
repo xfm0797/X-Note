@@ -56,9 +56,10 @@ export function MenuBar(p: Props) {
   )
 
   return (
-    <div className="topbar menubar">
-      <button className="icon-btn" title="折叠侧栏 (可拖拽调宽)" onClick={p.onToggleSidebar}>☰</button>
-      <span className="app-name">X-Note</span>
+    <>
+      <div className="topbar menubar">
+        <button className="icon-btn" title="折叠侧栏 (可拖拽调宽)" onClick={p.onToggleSidebar}>☰</button>
+        <span className="app-name">X-Note</span>
 
       {/* ── 文件 ── */}
       {menu('文件', <>
@@ -130,9 +131,33 @@ export function MenuBar(p: Props) {
         <div className="dropdown-sep" />
         {item('关于 X-Note…', p.onOpenAbout)}
       </>)}
+      </div>
 
-      <input ref={fileInputRef} type="file" accept=".md" multiple style={{ display: 'none' }}
-        onChange={e => { p.onImportFiles(e.target.files); e.target.value = '' }} />
-    </div>
+      {/* ── 常用工具栏（菜单栏下方快捷按钮） ── */}
+      <div className="topbar toolbar">
+        <button className="tb-btn" title="新建笔记 (Ctrl+N)" onClick={p.onNewNote}>📄 新建</button>
+        <button className="tb-btn" title="导入 .md 文件" onClick={() => fileInputRef.current?.click()}>📂 打开</button>
+        <button className="tb-btn" title="打开笔记库文件夹" onClick={p.onOpenLibrary}>🗀 笔记库</button>
+        <button className="tb-btn" title="保存 (Ctrl+S)" disabled={p.saving} onClick={p.onSave}>💾 保存</button>
+        <div className="tb-sep" />
+        <div className="view-switch" title="视图模式">
+          <button className={p.view === 'edit' ? 'active' : ''} onClick={() => p.onView('edit')}>编辑</button>
+          <button className={p.view === 'split' ? 'active' : ''} onClick={() => p.onView('split')}>分屏</button>
+          <button className={p.view === 'preview' ? 'active' : ''} onClick={() => p.onView('preview')}>预览</button>
+        </div>
+        <div className="tb-sep" />
+        <button className="tb-btn" title="搜索笔记 (Ctrl+F)" onClick={p.onFocusSearch}>🔍 搜索</button>
+        <button className="tb-btn" title="版本历史" onClick={p.onOpenHistory}>🕘 历史</button>
+        <button className="tb-btn" title="关系图谱" onClick={p.onOpenGraph}>🕸 图谱</button>
+        <button className="tb-btn" title="插件中心" onClick={p.onOpenPlugins}>🧩 插件</button>
+        <button className="tb-btn" title="云同步" onClick={p.onOpenSync}>☁ 同步</button>
+        <span className="topbar-flex" />
+        <button className="tb-btn" title={p.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'} onClick={p.onToggleTheme}>{p.theme === 'dark' ? '☀️' : '🌙'}</button>
+        <button className="tb-btn" title="设置" onClick={p.onOpenSettings}>⚙️ 设置</button>
+
+        <input ref={fileInputRef} type="file" accept=".md" multiple style={{ display: 'none' }}
+          onChange={e => { p.onImportFiles(e.target.files); e.target.value = '' }} />
+      </div>
+    </>
   )
 }
