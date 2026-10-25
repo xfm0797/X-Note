@@ -184,7 +184,7 @@ export interface MarketEntry {
 }
 
 const MARKET_URL_KEY = 'xnote:market-url'
-export const DEFAULT_MARKET_URL = 'https://raw.githubusercontent.com/xfm0797/xnote-plugin-center/main/index.json'
+export const DEFAULT_MARKET_URL = 'https://cdn.jsdelivr.net/gh/xfm0797/X-Note-Plugins@main/index.json'
 
 export function getMarketUrl(): string {
   return localStorage.getItem(MARKET_URL_KEY) || DEFAULT_MARKET_URL

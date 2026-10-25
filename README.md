@@ -285,9 +285,14 @@ interface XNotePlugin {
 - 校验清单（缺 id/name 报错）与入口文件（`main` 字段或默认 `main.js`）
 - 桌面端解压写入 `<笔记库>/.xnote-plugins/<插件名>/`（同名插件覆盖更新）；Web 预览模式存入 localStorage 模拟目录
 
-### 自建插件中心（GitHub / Gitee 仓库可行）
+### 插件中心（GitHub / Gitee 仓库作插件源）
 
-完全可行——插件中心就是一个「索引 + 插件包」的静态仓库：
+应用默认插件源为官方中心 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)（经 jsDelivr CDN 分发，国内访问友好）：
+`https://cdn.jsdelivr.net/gh/xfm0797/X-Note-Plugins@main/index.json`
+
+「设置 → 插件中心」刷新列表即可浏览官方插件（hello-world 样板、GitHub/Gitee Gist 备份）并一键安装。
+
+**自建插件中心**同样可行——插件中心就是一个「索引 + 插件包」的静态仓库：
 
 1. 新建公开仓库（GitHub 或 Gitee 均可，两者 raw 地址均支持浏览器跨域访问）
 2. 仓库根放 `index.json`：
