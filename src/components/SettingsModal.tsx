@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 import type { Settings } from '../types'
 import type { PluginSettingsPanel } from '../plugins/types'
 import { scanExternalPlugins, removeExternalPlugin, setExternalDisabled, loadExternalPlugin, type ExternalPluginEntry } from '../plugins/external'
+import { askConfirm, appToast } from './AskModal'
 
 interface Props {
   settings: Settings
@@ -80,7 +81,7 @@ export function SettingsModal(p: Props) {
         <div className="settings-section">
           <div className="section-title">外部插件
             <button className="mini-btn" onClick={reloadDir} title="重新扫描 .xnote-plugins/ 目录">↻ 重载插件目录</button>
-            <button className="mini-btn" onClick={() => { setExternalDisabled(true); p.onReloadExternal(); alert('已停用全部外部插件') }}>一键停用</button>
+            <button className="mini-btn" onClick={() => { setExternalDisabled(true); p.onReloadExternal(); appToast('已停用全部外部插件', 'success') }}>一键停用</button>
           </div>
           <ul className="ext-list">
             {(extList || []).map(e => (
@@ -91,7 +92,7 @@ export function SettingsModal(p: Props) {
                   <div className="ext-desc">{e.manifest.description}</div>
                 </div>
                 <button className="mini-btn danger" onClick={async () => {
-                  if (!confirm(`移除插件 ${e.dir}？`)) return
+                  if (!(await askConfirm(`移除插件 ${e.dir}？`, true))) return
                   removeExternalPlugin(e.dir)
                   // 桌面端同时删除真实目录
                   try {

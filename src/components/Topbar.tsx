@@ -17,6 +17,8 @@ interface Props {
   onOpenAbout(): void
   onNewWindow(): void
   onSelectFolder(): void
+  onSave(): void
+  saving: boolean
 }
 
 export function Topbar(p: Props) {
@@ -35,6 +37,10 @@ export function Topbar(p: Props) {
       </div>
 
       <div className="topbar-flex" />
+
+      <button className={`tb-btn save-btn ${p.saving ? 'saving' : ''}`} onClick={p.onSave} title="保存全部未保存内容 (Ctrl+S)">
+        {p.saving ? '⏳ 保存中…' : '💾 保存'}
+      </button>
 
       {p.pluginCommands.map(c => (
         <button key={c.id} className="tb-btn" onClick={c.run}>{c.title}</button>

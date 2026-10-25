@@ -8,6 +8,8 @@ import { createGitProvider, type GitConfig } from './providers/git'
 import type { SyncProvider } from './providers/types'
 import { ConflictModal } from './ConflictModal'
 import { isTauri } from '../../lib/storage'
+import { getLocalMirrorDir, setLocalMirrorDir } from './providers/localFolder'
+import { askConfirm } from '../../components/AskModal'
 
 const BASE_KEY = 'xnote:sync-base'
 
@@ -21,6 +23,7 @@ function SyncPanel({ ctx }: PanelProps) {
   const [git, setGit] = useState<GitConfig>(ctx.settings.get('git', { remote: 'origin', branch: 'main' }))
   const [testMsg, setTestMsg] = useState('')
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
+  const [mirrorDir, setMirrorDir] = useState<string>(getLocalMirrorDir() || '')
 
   const makeProvider = (): SyncProvider => {
     if (provider === 'webdav') return createWebDAVProvider(webdav)
@@ -43,9 +46,20 @@ function SyncPanel({ ctx }: PanelProps) {
 
   const doSync = async () => {
     save()
+    if (!(await askConfirm('开始同步？将把本地笔记与远端按上次基线比对。', false))) return
     setConflicts([])
     const r = await (window as any).__xnoteRunSync?.()
     if (r && r.conflicts?.length) setConflicts(r.conflicts)
+  }
+
+  const chooseMirrorDir = async () => {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const dir = await open({ directory: true, title: '选择镜像文件夹' })
+    if (typeof dir === 'string') {
+      setLocalMirrorDir(dir)
+      setMirrorDir(dir)
+      ctx.ui.showToast('镜像文件夹已设置', 'success')
+    }
   }
 
   const resolve = async (path: string, choice: ConflictChoice, item: ConflictItem) => {
@@ -67,6 +81,14 @@ function SyncPanel({ ctx }: PanelProps) {
           <option value="git">Git 仓库（仅桌面端）</option>
         </select>
       </label>
+      {provider === 'localFolder' && isTauri() && (
+        <div className="panel-fields">
+          <button className="btn" onClick={chooseMirrorDir}>选择镜像文件夹…</button>
+          {mirrorDir
+            ? <div className="panel-msg">镜像位置：{mirrorDir}</div>
+            : <div className="panel-warn">尚未选择镜像文件夹（未配置前无法同步，不会误删本地笔记）</div>}
+        </div>
+      )}
       {provider === 'webdav' && (
         <div className="panel-fields">
           <input placeholder="WebDAV 地址 https://…" value={webdav.url} onChange={e => setWebdav({ ...webdav, url: e.target.value })} />
@@ -123,36 +145,56 @@ export function createCloudSyncPlugin(): XNotePlugin {
           : providerId === 'git' ? createGitProvider(ctx.settings.get<GitConfig>('git', {}))
           : createLocalFolderProvider()
 
-        const tr = await ctx.storage.loadAll()
-        const rl = await remote.list()
-        const base = ctx.settings.get<Record<string, SyncFileInfo>>(BASE_KEY, {})
-        const pushed: string[] = [], pulled: string[] = []
-        const conflicts: ConflictItem[] = []
-
-        const paths = new Set([...Object.keys(tr), ...Object.keys(rl)])
-        for (const p of paths) {
-          const local: SyncFileInfo | null = tr[p] ? { hash: contentHash(tr[p].content), updated: tr[p].updated } : null
-          const r = rl[p] ?? null
-          const b = base[p] ?? null
-          const d = decideSync(local, r, b)
-          if (d === 'push') { await remote.push(p, tr[p].content); pushed.push(p); updateBase(ctx, { [p]: r! }) }
-          else if (d === 'pull') { await ctx.storage.writeFile(p, await remote.pull(p)); pulled.push(p) }
-          else if (d === 'delete-local') { await ctx.storage.deletePath(p) }
-          else if (d === 'conflict') {
-            conflicts.push({ path: p, local: tr[p]?.content ?? '', remote: r ? await remote.pull(p) : '' })
-          }
+        // 桌面端本地镜像必须先配置文件夹，避免与空远端同步造成误判
+        if (providerId === 'localFolder' && isTauri() && !getLocalMirrorDir()) {
+          ctx.ui.showToast('请先到 设置 → 云同步 选择镜像文件夹再同步', 'error')
+          return { conflicts: [] }
         }
-        await remote.afterSync?.()
-        ctx.ui.showToast(`同步完成：推送 ${pushed.length}，拉取 ${pulled.length}，冲突 ${conflicts.length}`,
-          conflicts.length ? 'info' : 'success')
-        await ctx.storage.reloadLibrary()
-        return { conflicts }
+
+        try {
+          const tr = await ctx.storage.loadAll()
+          const rl = await remote.list()
+          const base = ctx.settings.get<Record<string, SyncFileInfo>>(BASE_KEY, {})
+          const pushed: string[] = [], pulled: string[] = [], removed: string[] = []
+          const conflicts: ConflictItem[] = []
+
+          const paths = new Set([...Object.keys(tr), ...Object.keys(rl)])
+          for (const p of paths) {
+            const local: SyncFileInfo | null = tr[p] ? { hash: contentHash(tr[p].content), updated: tr[p].updated } : null
+            const r = rl[p] ?? null
+            const b = base[p] ?? null
+            const d = decideSync(local, r, b)
+            if (d === 'push' && tr[p]) {
+              await remote.push(p, tr[p].content); pushed.push(p)
+              updateBase(ctx, { [p]: { hash: contentHash(tr[p].content), updated: Date.now() } })
+            }
+            else if (d === 'pull') { await ctx.storage.writeFile(p, await remote.pull(p)); pulled.push(p); updateBase(ctx, { [p]: r! }) }
+            else if (d === 'delete-local' && b) { await ctx.storage.deletePath(p); removed.push(p) } // 仅基线存在才允许同步删除
+            else if (d === 'conflict') {
+              conflicts.push({ path: p, local: tr[p]?.content ?? '', remote: r ? await remote.pull(p) : '' })
+            }
+          }
+          await remote.afterSync?.()
+          const parts = [`推送 ${pushed.length}`, `拉取 ${pulled.length}`]
+          if (removed.length) parts.push(`删除 ${removed.length}（${removed.join('、')}）`)
+          parts.push(`冲突 ${conflicts.length}`)
+          ctx.ui.showToast(`同步完成：${parts.join('，')}`, conflicts.length ? 'info' : 'success')
+          await ctx.storage.reloadLibrary()
+          return { conflicts }
+        } catch (err) {
+          ctx.ui.showToast(`同步失败：${String(err)}`, 'error')
+          return { conflicts: [] }
+        }
       }
 
       ctx.ui.registerCommand({
         id: 'cloudsync.sync',
         title: '同步',
-        run: () => (window as any).__xnoteRunSync?.()
+        run: async () => {
+          // 同步具备写入/删除能力，执行前明确确认
+          if (!(await askConfirm('开始同步？将把本地笔记与远端按上次基线比对。', false))) return
+          await (window as any).__xnoteRunSync?.()
+        }
       })
 
       ctx.ui.registerSettingsPanel({

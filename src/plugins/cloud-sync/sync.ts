@@ -21,10 +21,15 @@ export function decideSync(
     (!x && !y) || (!!x && !!y && x.hash === y.hash)
 
   if (same(local, remote)) return 'none'                       // 两侧一致
-  if (!remote && base && local && local.hash !== base.hash) return 'push'      // 远端删除但本地改过 → 推回（保留本地）
+  if (!base) {
+    // 首次同步（无基线）：绝不删除任何一侧，只做新增/冲突
+    if (local && !remote) return 'push'                        // 仅本地有 → 推送
+    if (!local && remote) return 'pull'                        // 仅远端有 → 拉取
+    return 'conflict'                                          // 两侧都有但无基线 → 冲突裁决
+  }
+  if (!remote && local && local.hash !== base.hash) return 'push'      // 远端删除但本地改过 → 推回（保留本地）
   if (!remote) return 'delete-local'                           // 远端删除且本地未改 → 同步删除
   if (!local) return 'pull'                                    // 本地无 → 拉取
-  if (!base) return 'conflict'                                 // 无基线且两侧都有 → 冲突
   const localChanged = local.hash !== base.hash
   const remoteChanged = remote.hash !== base.hash
   if (localChanged && remoteChanged) return 'conflict'         // 两侧都改 → 冲突

@@ -108,7 +108,7 @@ const DEMO_PLUGIN_CODE = `export default {
       return h('div', null,
         h('label', null, '签名：'),
         h('input', { value: cfg.sign || '', onChange: (e) => setCfg({ ...cfg, sign: e.target.value }) }),
-        h('button', { onClick: () => { saveConfig(cfg); alert('已保存：' + (cfg.sign || '（空）')) } }, '保存'),
+        h('button', { onClick: () => { saveConfig(cfg); ctx.ui.showToast('已保存：' + (cfg.sign || '（空）'), 'success') } }, '保存'),
       )
     }
     ctx.ui.registerSettingsPanel({

@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from 'react'
 import { toolbarAction, continueList } from '../lib/editorFmt'
 import { saveImage } from '../lib/assets'
+import { appToast } from './AskModal'
 
 interface Props {
   value: string
@@ -71,7 +72,7 @@ export function Editor(p: Props) {
     e.preventDefault()
     const r = await saveImage(img)
     if (r.ok) insertAtCursor(r.markdown)
-    else alert(r.error)
+    else appToast(r.error, 'error')
   }
 
   return (

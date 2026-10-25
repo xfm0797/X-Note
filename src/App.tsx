@@ -17,6 +17,7 @@ import { GraphModal, type GraphNode, type GraphEdge } from './components/GraphMo
 import { HistoryModal } from './components/HistoryModal'
 import { AboutModal } from './components/AboutModal'
 import { SettingsModal } from './components/SettingsModal'
+import { DialogHost, askText, askConfirm, appToast } from './components/AskModal'
 import { createRegistry, } from './plugins/registry'
 import type { Host } from './plugins/host'
 import { scanExternalPlugins, loadExternalPlugin, isExternalDisabled, setExternalDisabled } from './plugins/external'
@@ -47,11 +48,9 @@ export default function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
   const [status, setStatus] = useState<'saved' | 'saving'>('saved')
-  const [toasts, setToasts] = useState<ToastMsg[]>([])
   const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'about'>('none')
   const [scrollTarget, setScrollTarget] = useState<string | null>(null)
   const [, forceRender] = useState(0)
-
   // 插件
   const hostRef = useRef<Host | null>(null)
   const [pluginCommands, setPluginCommands] = useState<{ id: string; title: string; run: () => void }[]>([])
@@ -59,9 +58,7 @@ export default function App() {
   const [extErrors, setExtErrors] = useState<Record<string, string>>({})
 
   const showToast = useCallback((text: string, kind: ToastMsg['kind'] = 'info') => {
-    const id = Date.now() + Math.random()
-    setToasts(ts => [...ts, { id, text, kind }])
-    setTimeout(() => setToasts(ts => ts.filter(t => t.id !== id)), 3000)
+    appToast(text, kind)
   }, [])
 
   const notifyPanelsChanged = useCallback(() => {
@@ -74,6 +71,8 @@ export default function App() {
   /* ---------- 启动：加载库 + 插件 ---------- */
   useEffect(() => {
     (async () => {
+      // 桌面端首次启动：未选择笔记库时先弹出文件夹选择
+      if (isTauri() && !(await getLibraryRoot())) await chooseLibraryRoot()
       const loaded = await storage.loadAll()
       setLib(loaded)
       setReady(true)
@@ -305,6 +304,34 @@ export default function App() {
     setStatus('saved')
   }, [lib])
 
+  /* ---------- 手动保存（Ctrl+S）与窗口关闭前落盘 ---------- */
+  const flushRef = useRef(flushSave)
+  useEffect(() => { flushRef.current = flushSave }, [flushSave])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        void flushRef.current().then(() => appToast('已保存', 'success'))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    let unlisten: (() => void) | undefined
+    ;(async () => {
+      if (isTauri()) {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window')
+          const un = await getCurrentWindow().onCloseRequested(async (e) => {
+            e.preventDefault()          // 先拦截关闭
+            await flushRef.current()    // 落盘未保存内容
+            getCurrentWindow().destroy() // 再真正关闭
+          })
+          unlisten = un
+        } catch { /* API 不可用时忽略 */ }
+      }
+    })()
+    return () => { window.removeEventListener('keydown', onKey); unlisten?.() }
+  }, [])
+
   const onEditorChange = useCallback((content: string, selStart?: number, selEnd?: number) => {
     if (!active) return
     setLib(l => ({ ...l, [active]: { content, updated: Date.now() } }))
@@ -320,7 +347,7 @@ export default function App() {
 
   const createNote = useCallback(async (dir: string) => {
     await flushSave()
-    const name = prompt('笔记名称：', '新建笔记.md')
+    const name = await askText('笔记名称：', '新建笔记.md')
     if (!name) return
     const path = dir ? `${dir}/${name.endsWith('.md') ? name : name + '.md'}` : (name.endsWith('.md') ? name : name + '.md')
     if (lib[path] !== undefined) { showToast('同名笔记已存在', 'error'); return }
@@ -332,7 +359,7 @@ export default function App() {
   }, [lib, flushSave, openNote, showToast])
 
   const createDir = useCallback(async (dir: string) => {
-    const name = prompt('文件夹名称：', '新建文件夹')
+    const name = await askText('文件夹名称：', '新建文件夹')
     if (!name) return
     const path = dir ? `${dir}/${name}` : name
     if (isTauri()) {
@@ -350,7 +377,7 @@ export default function App() {
 
   const renameNote = useCallback(async (path: string, isDir: boolean) => {
     const oldName = baseName(path)
-    const name = prompt('新名称：', oldName)
+    const name = await askText('新名称：', oldName)
     if (!name || name === oldName) return
     await flushSave()
     const newPath = path.slice(0, path.length - oldName.length) + name
@@ -369,7 +396,7 @@ export default function App() {
   }, [flushSave, showToast])
 
   const deleteNote = useCallback(async (path: string, isDir: boolean) => {
-    if (!confirm(`确定删除「${baseName(path)}」吗？${isDir ? '（文件夹内全部内容将删除）' : ''}`)) return
+    if (!(await askConfirm(`确定删除「${baseName(path)}」吗？${isDir ? '（文件夹内全部内容将删除）' : ''}`, true))) return
     await flushSave()
     await storage.deletePath(path, isDir)
     const next = await storage.loadAll()
@@ -486,6 +513,8 @@ export default function App() {
           sidebar: settings.sidebarVisible ? '1' : '0', sw: String(settings.sidebarWidth)
         })}
         onSelectFolder={onSelectFolder}
+        onSave={() => { void flushRef.current().then(() => appToast('已保存', 'success')) }}
+        saving={status === 'saving'}
       />
 
       <div className="main">
@@ -560,7 +589,9 @@ export default function App() {
             {active && <span>Ln {caret.line}, Col {caret.col}</span>}
             {active && <span>{words.words} 词 / {words.chars} 字</span>}
             <span className="status-flex" />
-            <span>{isTauri() ? '桌面模式 · 本地 .md 文件' : '浏览器预览 · localStorage'}</span>
+            <span className="lib-path" title={isTauri() ? (getLibraryRootCache() || '未选择笔记库') : '浏览器 localStorage'}>
+              {isTauri() ? (getLibraryRootCache() || '📁 未选择笔记库（点击顶栏 📁 选择）') : '浏览器预览 · localStorage'}
+            </span>
           </div>
         </div>
       </div>
@@ -596,10 +627,8 @@ export default function App() {
       )}
       {modal === 'about' && <AboutModal onClose={() => setModal('none')} />}
 
-      {/* Toast */}
-      <div className="toasts">
-        {toasts.map(t => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}
-      </div>
+      {/* 应用内对话框 + 全局 Toast（替代原生 prompt/confirm/alert） */}
+      <DialogHost />
     </div>
   )
 }
