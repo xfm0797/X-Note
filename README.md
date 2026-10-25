@@ -151,6 +151,9 @@ xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist
 - [x] 标签页：多笔记标签、点击切换、✕ 关闭；状态按窗口记忆（sessionStorage）+ 全局回退（localStorage）；重命名/移动/删除时同步
 - [x] 标签页拖拽排序：拖拽调整顺序，顺序随标签状态持久化
 - [x] 外部插件目录动态加载：`.xnote-plugins/` 每个子目录一个插件（plugin.json + main.js，ESM default 导出），Blob URL 动态 import；单插件损坏不影响其他；「设置 → 外部插件」查看状态 / 重载 / 移除 / 一键停用
+- [x] .zip 插件包安装：「设置 → 外部插件 → 安装 .zip 插件包」自动解压放入插件目录（含嵌套目录/覆盖安装/非法包校验）
+- [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装；自建插件源只需一个公开仓库（见「插件系统」章节）
+- [x] 自动更新：基于 Tauri updater（minisign 签名校验 + latest.json 清单），「设置 → 自动更新」检查 / 下载 / 安装 / 重启，配置说明见「自动更新」章节
 - [x] 官方外部插件：GitHub / Gitee Gist 备份 + hello-world 样板（`xnote-external-plugins/`）
 - [x] 关于：顶栏「关于」展示软件信息与开发者 XFM 主页（www.lovou.pw）与 GitHub（@xfm0797）
 - [x] 编辑器增强：
@@ -228,6 +231,79 @@ interface XNotePlugin {
 - **标签页**：sessionStorage（`xnote:tabs:session`）+ localStorage（`xnote:tabs:last`）
 - **插件配置**：localStorage（`xnote:plugin:<键>`）
 
+## 八、自动更新（Tauri updater）
+
+应用内置自动更新：`设置 → 自动更新` 可检查更新 → 下载并安装 → 重启生效。更新包经 minisign 私钥签名，应用内置公钥校验，防篡改。
+
+### 涉及的全部配置
+
+| 配置位置 | 配置项 | 当前值 / 说明 |
+| ---- | ---- | ---- |
+| `src-tauri/tauri.conf.json` | `bundle.createUpdaterArtifacts` | `true`——构建时生成更新产物及 `.sig` 签名文件 |
+| `src-tauri/tauri.conf.json` | `plugins.updater.pubkey` | minisign 公钥（与应用安装包内置一致，换钥需重新发版） |
+| `src-tauri/tauri.conf.json` | `plugins.updater.endpoints` | `https://github.com/xfm0797/X-Note/releases/latest/download/latest.json`——固定指向最新 Release 的清单文件 |
+| `src-tauri/Cargo.toml` | `tauri-plugin-updater` / `tauri-plugin-process` | 更新器与重启插件（Rust 侧） |
+| `src-tauri/capabilities/default.json` | `updater:default` / `process:allow-restart` | 前端调用更新 / 重启的权限 |
+| `.github/workflows/release.yml` | `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | **仓库 Secrets**（见下），CI 构建时用于签名 |
+| `scripts/gen-latest.mjs` | — | CI 在打 tag 构建后生成 `latest.json`（版本号、签名、安装包下载地址）并随 Release 上传 |
+
+### 发版前的一次性配置（必须）
+
+1. 在 GitHub 仓库 `X-Note` → Settings → Secrets and variables → Actions → New repository secret：
+   - Name：`TAURI_SIGNING_PRIVATE_KEY`，Value：私钥文件 `xnote.key` 的**完整内容**（含 untrusted comment 行和 base64 串；私钥不在仓库中，注意备份）
+   - Name：`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，Value：私钥密码（当前密钥为空密码，填空即可；不建也可以，CI 会传空串）
+2. 未配置私钥时 CI 构建会在签名步骤失败（tauri build 检测到 `createUpdaterArtifacts: true` 但无签名密钥）。
+
+### 更新流程
+
+1. 改代码 → 把 3 个版本文件（`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`）升到新版本号
+2. `git tag v0.x.y && git push origin v0.x.y` → CI 构建 NSIS/MSI + 签名 → 生成 `latest.json` → 全部上传到 Release
+3. 已安装的用户在「设置 → 自动更新」点「检查更新」：应用从 endpoints 拉取 `latest.json`，比对版本号 → 下载安装包 → 公钥校验签名 → 安装 → 重启
+
+### latest.json 格式
+
+```json
+{
+  "version": "0.2.0",
+  "notes": "X-Note 0.2.0 更新。详情见 Release 页面。",
+  "pub_date": "2026-10-25T04:00:00.000Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "<安装包 .sig 文件内容>",
+      "url": "https://github.com/xfm0797/X-Note/releases/download/v0.2.0/X-Note_0.2.0_x64-setup.exe"
+    }
+  }
+}
+```
+
+## 九、插件中心与 .zip 插件包安装
+
+### 安装 .zip 插件包
+
+「设置 → 外部插件 → ⬆ 安装 .zip 插件包」选择 zip 文件即可，应用自动完成：
+- 解压并定位 `plugin.json`（根目录或单个顶层目录包装均可）
+- 校验清单（缺 id/name 报错）与入口文件（`main` 字段或默认 `main.js`）
+- 桌面端解压写入 `<笔记库>/.xnote-plugins/<插件名>/`（同名插件覆盖更新）；Web 预览模式存入 localStorage 模拟目录
+
+### 自建插件中心（GitHub / Gitee 仓库可行）
+
+完全可行——插件中心就是一个「索引 + 插件包」的静态仓库：
+
+1. 新建公开仓库（GitHub 或 Gitee 均可，两者 raw 地址均支持浏览器跨域访问）
+2. 仓库根放 `index.json`：
+   ```json
+   [
+     { "id": "demo", "name": "演示插件", "version": "1.0.0",
+       "description": "示例", "author": "XFM",
+       "zip": "https://gitee.com/<user>/<repo>/releases/download/v1/demo.zip" }
+   ]
+   ```
+   也支持对象格式 `{ "plugins": [...] }`。`zip` 地址可指向同一仓库的 Release 资产（推荐，可下大文件）或仓库内直接提交的 zip 的 raw 地址
+3. 把插件按「外部插件目录」规范打好 zip 上传
+4. 应用内「设置 → 插件中心」填入 raw 索引地址（如 `https://gitee.com/<user>/<repo>/raw/main/index.json` 或 `https://raw.githubusercontent.com/<user>/<repo>/main/index.json`）→ 刷新列表 → 一键安装
+
+注意事项：Gitee raw 有访问频率限制且仓库必须公开；GitHub raw 在国内部分网络环境可能不稳定，可换用 jsDelivr CDN 镜像（`https://cdn.jsdelivr.net/gh/<user>/<repo>@main/index.json`，仅索引；zip 建议仍用 Release 地址）。
+
 ### 后续可扩展
 
-更多同步后端（对象存储等）/ 外部插件市场与签名校验 / 标签页拖拽到窗口外分离 / 历史版本两两对比。
+更多同步后端（对象存储等）/ 插件中心签名校验 / 标签页拖拽到窗口外分离 / 历史版本两两对比。

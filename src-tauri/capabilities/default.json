@@ -24,6 +24,8 @@
       "identifier": "shell:allow-spawn",
       "allow": [{ "name": "git", "cmd": "git", "args": true }]
     },
-    { "identifier": "shell:default" }
+    { "identifier": "shell:default" },
+    "updater:default",
+    "process:allow-restart"
   ]
 }

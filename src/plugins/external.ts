@@ -87,6 +87,130 @@ export function removeExternalPlugin(dir: string) {
   writeDirStore(store)
 }
 
+/* ---------- .zip 插件包安装 ---------- */
+
+export interface ZipInstallResult { dir: string; name: string; version: string; files: number }
+
+function sanitizeDirName(s: string): string {
+  return (s || 'plugin').replace(/[^\w\u4e00-\u9fa5.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'plugin'
+}
+
+/**
+ * 安装 .zip 插件包：自动解压并放入插件目录。
+ * zip 内需含 plugin.json（根目录或单个顶层目录内均可，含子目录文件结构）。
+ * 桌面端写入 <笔记库>/.xnote-plugins/<插件名>/；Web 模式存入 localStorage 模拟目录。
+ */
+export async function installZipPlugin(data: Uint8Array): Promise<ZipInstallResult> {
+  const { unzipSync } = await import('fflate')
+  let entries: Record<string, Uint8Array>
+  try { entries = unzipSync(data) } catch (e) { throw new Error('无法解压：不是有效的 zip 文件') }
+
+  // 过滤目录项与 macOS 垃圾
+  const files = Object.entries(entries).filter(([p, v]) =>
+    !p.endsWith('/') && v.length >= 0 && !p.includes('__MACOSX') && !p.split('/').pop()?.startsWith('._'))
+  if (!files.length) throw new Error('zip 中没有文件')
+
+  // 定位 plugin.json（根目录 / 单个顶层目录 / 任意深度取最浅）
+  const manifestPath = files.map(([p]) => p)
+    .filter(p => p.split('/').pop() === 'plugin.json')
+    .sort((a, b) => a.split('/').length - b.split('/').length)[0]
+  if (!manifestPath) throw new Error('zip 中未找到 plugin.json（必须是标准插件包）')
+
+  let manifest: ExternalPluginEntry['manifest']
+  try { manifest = JSON.parse(new TextDecoder().decode(entries[manifestPath])) }
+  catch { throw new Error('plugin.json 不是有效的 JSON') }
+  if (!manifest || typeof manifest !== 'object' || !manifest.id || !manifest.name)
+    throw new Error('plugin.json 缺少 id / name 字段')
+
+  // 基准目录：plugin.json 所在目录（含嵌套单目录包装的情况）；stripRoot 为根级
+  const baseParts = manifestPath.split('/').slice(0, -1)
+  const basePrefix = baseParts.length ? baseParts.join('/') + '/' : ''
+
+  const dirName = sanitizeDirName(baseParts.length === 1 && !basePrefix.includes('/')
+    ? baseParts[0] : manifest.id)
+
+  // 收集插件文件（相对路径 → 内容）
+  const pluginFiles: { rel: string; data: Uint8Array }[] = []
+  for (const [p, v] of files) {
+    if (!p.startsWith(basePrefix)) continue
+    const rel = p.slice(basePrefix.length)
+    if (!rel || rel.endsWith('/')) continue
+    pluginFiles.push({ rel, data: v })
+  }
+
+  const mainEntry = manifest.main || 'main.js'
+  if (!pluginFiles.some(f => f.rel === mainEntry))
+    throw new Error(`插件包缺少入口文件 ${mainEntry}`)
+
+  if (isTauri()) {
+    const fs = await import('@tauri-apps/plugin-fs')
+    const { getLibraryRoot } = await import('../lib/storage')
+    const root = await getLibraryRoot()
+    if (!root) throw new Error('请先选择笔记库')
+    const target = `${root}/.xnote-plugins/${dirName}`
+    // 覆盖安装：先删旧目录
+    try { await fs.remove(target, { recursive: true }) } catch { /* 不存在则忽略 */ }
+    for (const f of pluginFiles) {
+      const full = `${target}/${f.rel}`
+      const parent = full.split('/').slice(0, -1).join('/')
+      await fs.mkdir(parent, { recursive: true }).catch(() => {})
+      await fs.writeFile(full, f.data)
+    }
+  } else {
+    // Web：localStorage 模拟目录，保存主入口内容
+    const main = pluginFiles.find(f => f.rel === mainEntry)!
+    const store = readDirStore()
+    store[dirName] = {
+      dir: dirName,
+      manifest,
+      code: new TextDecoder().decode(main.data)
+    }
+    writeDirStore(store)
+  }
+  return { dir: dirName, name: manifest.name, version: manifest.version, files: pluginFiles.length }
+}
+
+/* ---------- 插件中心（GitHub / Gitee 仓库作插件源） ---------- */
+
+export interface MarketEntry {
+  id: string
+  name: string
+  version: string
+  description?: string
+  author?: string
+  /** .zip 插件包下载地址 */
+  zip: string
+  homepage?: string
+}
+
+const MARKET_URL_KEY = 'xnote:market-url'
+export const DEFAULT_MARKET_URL = 'https://raw.githubusercontent.com/xfm0797/xnote-plugin-center/main/index.json'
+
+export function getMarketUrl(): string {
+  return localStorage.getItem(MARKET_URL_KEY) || DEFAULT_MARKET_URL
+}
+export function setMarketUrl(url: string) {
+  localStorage.setItem(MARKET_URL_KEY, url.trim())
+}
+
+/** 拉取插件中心索引（index.json） */
+export async function fetchMarketIndex(url: string): Promise<MarketEntry[]> {
+  const res = await fetch(url, { headers: { Accept: 'application/json' } })
+  if (!res.ok) throw new Error(`索引拉取失败：HTTP ${res.status}`)
+  const data = await res.json()
+  const list = Array.isArray(data) ? data : data.plugins
+  if (!Array.isArray(list)) throw new Error('索引格式不符：需要数组或 { plugins: [...] }')
+  return list.filter(e => e && e.id && e.zip)
+}
+
+/** 从插件中心安装（下载 zip → 走 installZipPlugin 流程） */
+export async function installFromMarket(entry: MarketEntry): Promise<ZipInstallResult> {
+  const res = await fetch(entry.zip)
+  if (!res.ok) throw new Error(`插件包下载失败：HTTP ${res.status}`)
+  const buf = new Uint8Array(await res.arrayBuffer())
+  return installZipPlugin(buf)
+}
+
 /** Web 模式：演示插件源码（等价于 xnote-external-plugins/hello-world/main.js） */
 const DEMO_PLUGIN_CODE = `export default {
   manifest: { id: 'hello-world', name: 'Hello World 样板', version: '1.0.0', description: '演示命令 + 设置面板 + storage 读写' },

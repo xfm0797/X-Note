@@ -65,6 +65,10 @@ button { font-family: inherit; }
 .icon-btn:hover, .tb-btn:hover, .mini-btn:hover { background: var(--bg-hover); }
 .mini-btn { padding: 2px 8px; font-size: 12px; border: 1px solid var(--border); }
 .mini-btn.danger { color: var(--danger); }
+.mini-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.mini-btn[disabled] { opacity: .55; cursor: default; }
+.market-url { display: flex; gap: 6px; align-items: center; margin: 6px 0; }
+.market-url input { flex: 1; font-size: 12px; padding: 4px 8px; }
 .view-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .view-switch button {
   border: none; background: transparent; color: var(--text);
