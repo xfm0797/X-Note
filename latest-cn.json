@@ -1,11 +1,11 @@
 {
-  "version": "0.2.2",
-  "notes": "X-Note 0.2.2 更新。详情见 Release 页面。",
-  "pub_date": "2026-10-25T06:48:10.206Z",
+  "version": "0.2.3",
+  "notes": "X-Note 0.2.3 更新。详情见 Release 页面。",
+  "pub_date": "2026-10-25T07:13:19.737Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRSkMzeUZrODFGTlYrREFqR3lYUVVzM2R3NjJBT29QUllnKzgvK01pUEY2UUI1cStxU1ViZ2lPUytSVU1YZWJ6SnJldHdnbWdNdGh4aW1CaytSKy9GZmZzV2p6NW5GWWcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyOTEwODg5CWZpbGU6WC1Ob3RlXzAuMi4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjIuMgp2THVsYXlGQm8vNStaTFBxR012Y2ZUcXEyZmRnWU01UkZKMnE4cXVSSEtWMHErQVdYRVNyaVFxQVYyMU1HeU1qekx4RmFHT1RCUEVsQ3BUc21yRUtDQT09Cg==",
-      "url": "https://gitee.com/xfm0797/x-note/releases/download/v0.2.2/X-Note_0.2.2_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRSkMzeUZrODFGTmZ6Qm9ZOTdUejhvSFNTaSt4RVdDY2FMN2tDR1lZa2taTmQ0UERtZ3pQemhQRy82R2dqRE5SaUNRdVNFUWxqTXZRRy84ejFiTm9IODBmc0JJNG9GNGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyOTEyMzk5CWZpbGU6WC1Ob3RlXzAuMi4zX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjIuMwpOVjR4QjdIc1lKalE5QVlDVG9WSXNUWnN3UlRONVZpYTlIOW1HcmdTcFZLcFQ5cU5QczJJUlNYbXpQU2ZLMHc1Vzk5UDBqSXFuQkFncGszYzN2WW5CUT09Cg==",
+      "url": "https://gitee.com/xfm0797/x-note/releases/download/v0.2.3/X-Note_0.2.3_x64-setup.exe"
     }
   }
 }
