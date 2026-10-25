@@ -10,6 +10,8 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 允许向 main 推送 latest-cn.json 保持双端同步
     steps:
       - uses: actions/checkout@v4
 
