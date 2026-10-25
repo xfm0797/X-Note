@@ -16,7 +16,10 @@
     { "identifier": "fs:allow-write-file", "allow": [{ "path": "**" }] },
     "dialog:default",
     { "identifier": "dialog:allow-open" },
-    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "git", "cmd": "git", "args": true }]
+    },
     {
       "identifier": "shell:allow-spawn",
       "allow": [{ "name": "git", "cmd": "git", "args": true }]

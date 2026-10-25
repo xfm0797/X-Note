@@ -1,6 +1,6 @@
 [package]
 name = "x-note"
-version = "0.1.1"
+version = "0.1.2"
 description = "X-Note 笔记 - 本地优先的 Markdown 笔记软件"
 authors = ["XFM <https://www.lovou.pw>"]
 edition = "2021"

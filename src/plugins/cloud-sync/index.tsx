@@ -76,7 +76,7 @@ function SyncPanel({ ctx }: PanelProps) {
     <div className="plugin-panel">
       <label>同步后端：
         <select value={provider} onChange={e => { setProvider(e.target.value); save(e.target.value) }}>
-          <option value="localFolder">本地文件夹镜像（Web 用 localStorage 模拟远端）</option>
+          <option value="localFolder">{isTauri() ? '本地文件夹镜像' : '本地文件夹镜像（浏览器预览用 localStorage 模拟远端）'}</option>
           <option value="webdav">WebDAV（Nextcloud / 群晖等）</option>
           <option value="git">Git 仓库（仅桌面端）</option>
         </select>
