@@ -44,13 +44,13 @@ upload() { # $1=文件路径  $2=表单字段名
 }
 for f in "$EXE" "$SIG" "$CN"; do
   NAME=$(basename "$f")
-  echo "  - $NAME (字段名 files)"
-  if upload "$f" "files"; then
-    echo "    OK"
-  else
-    echo "    字段名 files 失败，改用 files[] 重试"
-    upload "$f" "files[]" || { echo "  上传失败: $NAME"; exit 1; }
-  fi
+  echo "  - $NAME"
+  OK=0
+  for FIELD in file files files[]; do
+    echo "    尝试字段名: $FIELD"
+    if upload "$f" "$FIELD"; then echo "    OK"; OK=1; break; fi
+  done
+  [ "$OK" = "1" ] || { echo "  上传失败: $NAME"; exit 1; }
 done
 
 echo "==> 校验 Release 资产"
