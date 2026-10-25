@@ -18,6 +18,8 @@ import { GraphModal, type GraphNode, type GraphEdge } from './components/GraphMo
 import { HistoryModal } from './components/HistoryModal'
 import { AboutModal } from './components/AboutModal'
 import { SettingsModal } from './components/SettingsModal'
+import { PluginsModal } from './components/PluginsModal'
+import { SyncModal } from './components/SyncModal'
 import { DialogHost, askText, askConfirm, appToast } from './components/AskModal'
 import { createRegistry, } from './plugins/registry'
 import type { Host } from './plugins/host'
@@ -706,14 +708,24 @@ export default function App() {
           onClose={() => setModal('none')}
         />
       )}
-      {(modal === 'settings' || modal === 'sync' || modal === 'plugins') && (
+      {modal === 'settings' && (
         <SettingsModal
           settings={settings}
           onChange={patchSettings}
+          onClose={() => setModal('none')}
+        />
+      )}
+      {modal === 'plugins' && (
+        <PluginsModal
           panels={pluginPanels}
           onReloadExternal={reloadExternal}
           onClose={() => setModal('none')}
-          initialSection={modal === 'sync' ? 'sync' : modal === 'plugins' ? 'plugins' : undefined}
+        />
+      )}
+      {modal === 'sync' && (
+        <SyncModal
+          panels={pluginPanels}
+          onClose={() => setModal('none')}
         />
       )}
       {modal === 'about' && <AboutModal onClose={() => setModal('none')} />}

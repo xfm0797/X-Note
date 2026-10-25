@@ -203,16 +203,7 @@ export function createCloudSyncPlugin(): XNotePlugin {
         }
       }
 
-      ctx.ui.registerCommand({
-        id: 'cloudsync.sync',
-        title: '同步',
-        run: async () => {
-          // 同步具备写入/删除能力，执行前明确确认
-          if (!(await askConfirm('开始同步？将把本地笔记与远端按上次基线比对。', false))) return
-          await (window as any).__xnoteRunSync?.()
-        }
-      })
-
+      // 同步入口统一在「插件 → 同步…」菜单（SyncPanel 内含立即同步按钮），不再注册重复命令
       ctx.ui.registerSettingsPanel({
         id: 'cloudSync',
         title: '云同步',
