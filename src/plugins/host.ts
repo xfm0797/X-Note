@@ -1,4 +1,9 @@
 // ===== 插件宿主：注册表 + UI API + 命令归属跟踪 =====
+// 防重复加载机制：
+// 1. registerPlugin 幂等 —— 同 id 重新注册前先清掉旧注册
+// 2. epoch 机制 —— clear() 递增 epoch，注册期间捕获 epoch，
+//    重载后迟到的注册（旧一轮加载流程的 activate 尚未完成）一律丢弃
+// 3. (owner, cmd/panel id) 去重 —— 插件内部重复注册同 id 也只保留一份
 import type { NoteMeta } from '../types'
 import type { PluginCommand, PluginContext, PluginSettingsPanel, XNotePlugin } from './types'
 import { isTauri } from '../lib/storage'
@@ -30,12 +35,24 @@ export interface Host {
 export function createHost(deps: HostDeps): Host {
   const commands: (PluginCommand & { owner: string })[] = []
   const panels: (PluginSettingsPanel & { owner: string })[] = []
+  // 全局注册纪元：每次 clear() 后 +1，用于丢弃重载前发起的迟到注册
+  let epoch = 0
 
   const DISABLE_KEY = 'xnote:external-plugins-disabled'
 
+  /** 按 owner 移除注册（不递增 epoch，供幂等重注册使用） */
+  function removeOwner(owner: string) {
+    for (let i = commands.length - 1; i >= 0; i--) if (commands[i].owner === owner) commands.splice(i, 1)
+    for (let i = panels.length - 1; i >= 0; i--) if (panels[i].owner === owner) panels.splice(i, 1)
+  }
+
   const host: Host = {
     async registerPlugin(plugin) {
-      const pSettingsKey = `xnote:plugin:${plugin.manifest.id}`
+      const myEpoch = epoch
+      const id = plugin.manifest.id
+      // 幂等：同 id 重复注册时先清掉旧注册，保证同一插件只有一份
+      removeOwner(id)
+      const pSettingsKey = `xnote:plugin:${id}`
       const ctx: PluginContext = {
         manifest: plugin.manifest,
         storage: {
@@ -62,22 +79,31 @@ export function createHost(deps: HostDeps): Host {
           }
         },
         ui: {
-          registerCommand: (cmd) => { commands.push({ ...cmd, owner: plugin.manifest.id }) },
-          registerSettingsPanel: (panel) => { panels.push({ ...panel, owner: plugin.manifest.id }) },
+          registerCommand: (cmd) => {
+            // epoch 变化 = 注册期间发生过重载，丢弃迟到注册
+            if (epoch !== myEpoch) return
+            // (owner, cmd.id) 去重：插件内部重复注册同 id 只保留一份
+            if (commands.some(c => c.owner === id && c.id === cmd.id)) return
+            commands.push({ ...cmd, owner: id })
+          },
+          registerSettingsPanel: (panel) => {
+            if (epoch !== myEpoch) return
+            if (panels.some(p => p.owner === id && p.id === panel.id)) return
+            panels.push({ ...panel, owner: id })
+          },
           showToast: (text, kind) => deps.showToast(text, kind)
         },
-        log: (...args) => console.log(`[plugin:${plugin.manifest.id}]`, ...args)
+        log: (...args) => console.log(`[plugin:${id}]`, ...args)
       }
-      commands.push // noop 防止 TS 优化提示
       await plugin.activate(ctx)
       deps.notifyPanelsChanged()
     },
     commands: () => commands.slice(),
     panels: () => panels.slice(),
     clear(source) {
+      epoch++ // 使所有进行中的注册流程过期
       if (!source) { commands.length = 0; panels.length = 0; return }
-      for (let i = commands.length - 1; i >= 0; i--) if (commands[i].owner === source) commands.splice(i, 1)
-      for (let i = panels.length - 1; i >= 0; i--) if (panels[i].owner === source) panels.splice(i, 1)
+      removeOwner(source)
     },
     isExternalDisabled: () => {
       try { return localStorage.getItem(DISABLE_KEY) === '1' } catch { return false }

@@ -53,6 +53,8 @@ export default function App() {
   const [, forceRender] = useState(0)
   // 插件
   const hostRef = useRef<Host | null>(null)
+  const initStartedRef = useRef(false) // StrictMode 下 effect 双跑守卫，防止插件重复加载
+  const extLoadingRef = useRef(false)  // 外部插件重载并发锁
   const [pluginCommands, setPluginCommands] = useState<{ id: string; title: string; run: () => void }[]>([])
   const [pluginPanels, setPluginPanels] = useState<{ id: string; title: string; render: () => any }[]>([])
   const [extErrors, setExtErrors] = useState<Record<string, string>>({})
@@ -70,7 +72,9 @@ export default function App() {
 
   /* ---------- 启动：加载库 + 插件 ---------- */
   useEffect(() => {
-    (async () => {
+    if (initStartedRef.current) return // 防止 StrictMode 双跑导致插件/库重复初始化
+    initStartedRef.current = true
+    ;(async () => {
       // 桌面端首次启动：未选择笔记库时先弹出文件夹选择
       if (isTauri() && !(await getLibraryRoot())) await chooseLibraryRoot()
       await ensureLibraryDirs() // 补建 .xnote-plugins/ 等辅助目录（防止手动建错名）
@@ -139,20 +143,26 @@ export default function App() {
   const reloadExternal = useCallback(async () => {
     const h = hostRef.current
     if (!h) return
-    h.clear('external')
-    if (!isExternalDisabled()) {
-      const entries = await scanExternalPlugins()
-      const errs: Record<string, string> = {}
-      for (const e of entries) {
-        try { await h.registerPlugin(await loadExternalPlugin(e)) }
-        catch (err) { errs[e.dir] = String(err) }
+    if (extLoadingRef.current) { showToast('插件重载进行中，请稍候', 'info'); return }
+    extLoadingRef.current = true
+    try {
+      h.clear('external') // 递增 epoch：上一轮未完成的注册将被宿主丢弃
+      if (!isExternalDisabled()) {
+        const entries = await scanExternalPlugins()
+        const errs: Record<string, string> = {}
+        for (const e of entries) {
+          try { await h.registerPlugin(await loadExternalPlugin(e)) }
+          catch (err) { errs[e.dir] = String(err) }
+        }
+        setExtErrors(errs)
+        showToast('外部插件目录已重载', 'success')
+      } else {
+        showToast('外部插件已停用', 'info')
       }
-      setExtErrors(errs)
-      showToast('外部插件目录已重载', 'success')
-    } else {
-      showToast('外部插件已停用', 'info')
+      notifyPanelsChanged()
+    } finally {
+      extLoadingRef.current = false
     }
-    notifyPanelsChanged()
   }, [showToast, notifyPanelsChanged])
 
   /* ---------- 主题（含跟随系统） ---------- */
