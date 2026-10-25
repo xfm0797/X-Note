@@ -286,6 +286,25 @@ body.dark .dlg-menu-item.danger { color: #f87171; }
   color: var(--text-secondary); font-size: 11px;
 }
 
+/* 插件目录路径提示 */
+.ext-path { font-size: 11px; color: var(--text-secondary); margin: 6px 0; }
+.ext-path code { background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; }
+
+/* 云同步 Git 帮助块 */
+.panel-help {
+  font-size: 12px; color: var(--text); line-height: 1.6;
+  border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; margin-top: 4px;
+}
+.panel-help .help-title { font-weight: 700; margin-bottom: 4px; }
+.panel-help ol { margin: 0; padding-left: 18px; }
+.panel-help li { margin: 3px 0; }
+.panel-help code { background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.panel-help pre {
+  background: var(--bg-hover); border-radius: 6px; padding: 8px 10px; margin: 4px 0;
+  font-size: 11px; overflow-x: auto; line-height: 1.5;
+}
+.panel-help .help-tip { color: var(--text-secondary); font-size: 11px; margin-top: 6px; }
+
 /* 图谱 */
 .graph-modal { width: 940px; }
 .graph-svg { width: 100%; height: 540px; background: var(--bg); border-radius: 10px; user-select: none; }

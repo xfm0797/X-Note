@@ -1,9 +1,10 @@
 // ===== 设置面板（主题、字号、默认导出格式、字体 + 插件设置分区 + 外部插件管理） =====
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { Settings } from '../types'
 import type { PluginSettingsPanel } from '../plugins/types'
 import { scanExternalPlugins, removeExternalPlugin, setExternalDisabled, loadExternalPlugin, type ExternalPluginEntry } from '../plugins/external'
 import { askConfirm, appToast } from './AskModal'
+import { isTauri, getLibraryRoot, ensureLibraryDirs } from '../lib/storage'
 
 interface Props {
   settings: Settings
@@ -16,6 +17,15 @@ interface Props {
 export function SettingsModal(p: Props) {
   const [extList, setExtList] = useState<ExternalPluginEntry[] | null>(null)
   const [extBusy, setExtBusy] = useState(false)
+  const [pluginDir, setPluginDir] = useState<string>('')
+
+  useEffect(() => {
+    ;(async () => {
+      if (!isTauri()) return
+      const root = await getLibraryRoot()
+      if (root) setPluginDir(`${root}\\.xnote-plugins`)
+    })()
+  }, [])
 
   const loadExt = async () => {
     setExtBusy(true)
@@ -81,8 +91,16 @@ export function SettingsModal(p: Props) {
         <div className="settings-section">
           <div className="section-title">外部插件
             <button className="mini-btn" onClick={reloadDir} title="重新扫描 .xnote-plugins/ 目录">↻ 重载插件目录</button>
+            {isTauri() && <button className="mini-btn" onClick={async () => { await ensureLibraryDirs(); appToast('已确保插件目录存在：.xnote-plugins', 'success') }}>创建插件目录</button>}
             <button className="mini-btn" onClick={() => { setExternalDisabled(true); p.onReloadExternal(); appToast('已停用全部外部插件', 'success') }}>一键停用</button>
           </div>
+          {isTauri() && (
+            <div className="ext-path">
+              {pluginDir
+                ? <>插件目录：<code>{pluginDir}</code>（每个插件一个子目录，含 plugin.json + main.js）</>
+                : '请先选择笔记库'}
+            </div>
+          )}
           <ul className="ext-list">
             {(extList || []).map(e => (
               <li key={e.dir}>

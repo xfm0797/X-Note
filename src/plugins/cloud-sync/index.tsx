@@ -102,6 +102,22 @@ function SyncPanel({ ctx }: PanelProps) {
           <input placeholder="remote（默认 origin）" value={git.remote || ''} onChange={e => setGit({ ...git, remote: e.target.value })} />
           <input placeholder="branch（默认 main）" value={git.branch || ''} onChange={e => setGit({ ...git, branch: e.target.value })} />
           {!isTauri() && <div className="panel-warn">Git 后端需要桌面端（Tauri shell 执行 git）</div>}
+          {isTauri() && (
+            <div className="panel-help">
+              <div className="help-title">使用步骤：</div>
+              <ol>
+                <li>系统需已安装 <b>Git</b> 并加入 PATH（终端执行 <code>git --version</code> 可用）</li>
+                <li>把<b>笔记库文件夹</b>初始化为 Git 仓库并关联远端（在终端中执行）：
+                  <pre>{`cd 你的笔记库路径
+git init
+git remote add origin https://github.com/用户名/仓库名.git`}</pre>
+                </li>
+                <li>填好上方 remote / branch（一般保持默认），点「测试连接」验证（会执行 <code>git fetch</code>）</li>
+                <li>点「立即同步」：自动比对远端与本地，本地改动会 commit 后 push</li>
+              </ol>
+              <div className="help-tip">提示：私有仓库需已配置凭据（HTTPS token 或 SSH key）；可在库内放 .gitignore 忽略 .xnote-history/ 等辅助数据。</div>
+            </div>
+          )}
         </div>
       )}
       <div className="panel-btns">

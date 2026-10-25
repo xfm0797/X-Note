@@ -1,7 +1,7 @@
 // ===== X-Note 主逻辑：状态、自动保存、搜索、主题、导入导出、插件宿主接入 =====
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Settings, TreeItem, NoteMeta, Heading, Backlink, ToastMsg, ViewMode } from './types'
-import { storage, isTauri, chooseLibraryRoot, getLibraryRoot } from './lib/storage'
+import { storage, isTauri, chooseLibraryRoot, getLibraryRoot, ensureLibraryDirs } from './lib/storage'
 import { buildTree, filterTree, loadOrder, saveOrder, moveNode, baseName, stripMd, orderSnapshot } from './lib/tree'
 import { extractOutline, extractTags, buildBacklinks, extractWikiTargets, renderMarkdown } from './lib/markdown'
 import { countWords } from './lib/editorFmt'
@@ -73,6 +73,7 @@ export default function App() {
     (async () => {
       // 桌面端首次启动：未选择笔记库时先弹出文件夹选择
       if (isTauri() && !(await getLibraryRoot())) await chooseLibraryRoot()
+      await ensureLibraryDirs() // 补建 .xnote-plugins/ 等辅助目录（防止手动建错名）
       const loaded = await storage.loadAll()
       setLib(loaded)
       setReady(true)

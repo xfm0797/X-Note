@@ -118,8 +118,25 @@ export async function chooseLibraryRoot(): Promise<string | null> {
   if (!isTauri()) return null
   const { open } = await import('@tauri-apps/plugin-dialog')
   const dir = await open({ directory: true, title: '选择笔记库文件夹' })
-  if (typeof dir === 'string') { lsSet(ROOT_KEY, dir); return dir }
+  if (typeof dir === 'string') {
+    lsSet(ROOT_KEY, dir)
+    await ensureLibraryDirs()
+    return dir
+  }
   return null
+}
+
+/** 确保笔记库辅助目录存在（外部插件目录等），创建/选择笔记库与启动时调用 */
+export async function ensureLibraryDirs(): Promise<void> {
+  if (!isTauri()) return
+  const root = await getLibraryRoot()
+  if (!root) return
+  try {
+    const fs = await tauriFs()
+    for (const dir of ['.xnote-plugins', 'assets']) {
+      try { await fs.mkdir(`${root}/${dir}`, { recursive: true }) } catch { /* 已存在 */ }
+    }
+  } catch { /* fs 不可用时忽略 */ }
 }
 
 async function tauriLoadAll(): Promise<Record<string, NoteMeta>> {
