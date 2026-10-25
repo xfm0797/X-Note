@@ -22,11 +22,11 @@ echo "==> 查询 Gitee 上是否已存在 $TAG 的 Release"
 RELEASE_ID=$(curl -s "${API}/releases/tags/${TAG}?${AUTH}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d);console.log(j.id||'')}catch{console.log('')}})")
 
 if [ -z "${RELEASE_ID:-}" ]; then
-  echo "==> 创建 Gitee Release $TAG（tag 已随仓库推送至 Gitee，不传 target_commitish）"
+  echo "==> 创建 Gitee Release $TAG（Gitee API 强制要求 target_commitish）"
   VERSION="${TAG#v}"
   RESP=$(curl -s -X POST "${API}/releases?${AUTH}" \
     -H "Content-Type: application/json" \
-    -d "{\"tag_name\":\"${TAG}\",\"name\":\"X-Note ${TAG}\",\"body\":\"X-Note ${VERSION} 更新。本页为国内直连备用下载路线，主发布页见 GitHub Release。\"}")
+    -d "{\"tag_name\":\"${TAG}\",\"name\":\"X-Note ${TAG}\",\"body\":\"X-Note ${VERSION} 更新。本页为国内直连备用下载路线，主发布页见 GitHub Release。\",\"target_commitish\":\"main\"}")
   echo "  API 响应: $RESP"
   RELEASE_ID=$(echo "$RESP" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d);console.log(j.id||'')}catch{console.log('')}})")
   [ -n "$RELEASE_ID" ] || { echo "创建 Release 失败"; exit 1; }
