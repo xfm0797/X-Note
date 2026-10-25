@@ -8,7 +8,8 @@ import { countWords } from './lib/editorFmt'
 import { pushSnapshot, listSnapshots } from './lib/history'
 import { doExport } from './lib/export'
 import { windowParams } from './lib/window'
-import { Topbar } from './components/Topbar'
+import { transformText, lineOffset, type EditOp } from './lib/editOps'
+import { MenuBar } from './components/MenuBar'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { Editor } from './components/Editor'
@@ -48,7 +49,7 @@ export default function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
   const [status, setStatus] = useState<'saved' | 'saving'>('saved')
-  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'about'>('none')
+  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'about'>('none')
   const [scrollTarget, setScrollTarget] = useState<string | null>(null)
   const [, forceRender] = useState(0)
   // 插件
@@ -315,14 +316,29 @@ export default function App() {
     setStatus('saved')
   }, [lib])
 
-  /* ---------- 手动保存（Ctrl+S）与窗口关闭前落盘 ---------- */
+  /* ---------- 手动保存（Ctrl+S）与全局快捷键、窗口关闭前落盘 ---------- */
   const flushRef = useRef(flushSave)
   useEffect(() => { flushRef.current = flushSave }, [flushSave])
+  // 全局快捷键经 ref 调最新回调，避免闭包过期
+  const opsRef = useRef<{
+    newNote(): void; focusSearch(): void; gotoLine(): void; zoom(d: number): void
+  }>({ newNote: () => {}, focusSearch: () => {}, gotoLine: () => {}, zoom: () => {} })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      const ctrl = e.ctrlKey || e.metaKey
+      if (ctrl && e.key.toLowerCase() === 's') {
         e.preventDefault()
         void flushRef.current().then(() => appToast('已保存', 'success'))
+      } else if (ctrl && e.key.toLowerCase() === 'n') {
+        e.preventDefault(); opsRef.current.newNote()
+      } else if (ctrl && e.key.toLowerCase() === 'f') {
+        e.preventDefault(); opsRef.current.focusSearch()
+      } else if (ctrl && e.key.toLowerCase() === 'g') {
+        e.preventDefault(); opsRef.current.gotoLine()
+      } else if (ctrl && (e.key === '=' || e.key === '+')) {
+        e.preventDefault(); opsRef.current.zoom(1)
+      } else if (ctrl && e.key === '-') {
+        e.preventDefault(); opsRef.current.zoom(-1)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -355,6 +371,63 @@ export default function App() {
       })
     }
   }, [active, scheduleSave])
+
+  /* ---------- 菜单：编辑操作 / 视图缩放 / 跳转 / 搜索聚焦 / 退出 ---------- */
+  const runEditOp = useCallback((op: EditOp) => {
+    const el = document.querySelector<HTMLTextAreaElement>('.editor-textarea')
+    if (!active || !el) { appToast('请先打开一篇笔记', 'info'); return }
+    if (op === 'undo' || op === 'redo') {
+      el.focus()
+      document.execCommand(op === 'undo' ? 'undo' : 'redo')
+      return
+    }
+    if (op === 'select-all') { el.focus(); el.select(); return }
+    const res = transformText(op, activeContent, el.selectionStart, el.selectionEnd)
+    if (!res) { appToast('该操作需要先选中文本', 'info'); return }
+    onEditorChange(res.text, res.selStart, res.selEnd)
+  }, [active, activeContent, onEditorChange])
+
+  const zoomFont = useCallback((d: number) => {
+    patchSettings({ fontSize: d === 0 ? 15 : Math.min(24, Math.max(12, settings.fontSize + d)) })
+  }, [settings.fontSize])
+
+  const gotoLine = useCallback(async () => {
+    const el = document.querySelector<HTMLTextAreaElement>('.editor-textarea')
+    if (!active || !el) { appToast('请先打开一篇笔记', 'info'); return }
+    const n = Number(await askText(`跳转到行号（共 ${activeContent.split('\n').length} 行）：`, '1'))
+    if (!Number.isInteger(n) || n < 1) return
+    const off = lineOffset(activeContent, n)
+    if (off === null) { appToast('行号超出范围', 'info'); return }
+    el.focus()
+    el.setSelectionRange(off, off)
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 24
+    el.scrollTop = Math.max(0, (n - 5) * lh)
+  }, [active, activeContent])
+
+  const focusSearch = useCallback(() => {
+    if (!settings.sidebarVisible) patchSettings({ sidebarVisible: true })
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.sidebar-search')?.focus())
+  }, [settings.sidebarVisible])
+
+  const exitApp = useCallback(async () => {
+    await flushRef.current()
+    if (isTauri()) {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      getCurrentWindow().destroy()
+    } else {
+      window.close()
+    }
+  }, [])
+
+  // 把最新回调挂到全局快捷键 ref 上
+  useEffect(() => {
+    opsRef.current = {
+      newNote: () => { void createNote(active ? active.split('/').slice(0, -1).join('/') : '') },
+      focusSearch,
+      gotoLine: () => { void gotoLine() },
+      zoom: zoomFont
+    }
+  })
 
   const createNote = useCallback(async (dir: string) => {
     await flushSave()
@@ -506,12 +579,14 @@ export default function App() {
 
   return (
     <div className="app" onDragOver={e => e.preventDefault()} onDrop={e => { if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files) }}>
-      <Topbar
+      <MenuBar
         view={settings.view}
         theme={isDark ? 'dark' : 'light'}
         sidebarVisible={settings.sidebarVisible}
+        fontSize={settings.fontSize}
         pluginCommands={pluginCommands}
         onView={v => patchSettings({ view: v })}
+        onZoom={zoomFont}
         onToggleTheme={() => patchSettings({ theme: isDark ? 'light' : 'dark' })}
         onToggleSidebar={() => patchSettings({ sidebarVisible: !settings.sidebarVisible })}
         onExport={doExportActive}
@@ -519,10 +594,16 @@ export default function App() {
         onOpenHistory={openHistory}
         onOpenSettings={() => setModal('settings')}
         onOpenSync={() => setModal('sync')}
+        onOpenPlugins={() => setModal('plugins')}
         onOpenAbout={() => setModal('about')}
-        onCreateNote={() => createNote(active ? active.split('/').slice(0, -1).join('/') : '')}
-        onSelectFolder={onSelectFolder}
+        onNewNote={() => { void createNote(active ? active.split('/').slice(0, -1).join('/') : '') }}
+        onImportFiles={importFiles}
+        onOpenLibrary={onSelectFolder}
         onSave={() => { void flushRef.current().then(() => appToast('已保存', 'success')) }}
+        onEditOp={runEditOp}
+        onFocusSearch={focusSearch}
+        onGotoLine={() => { void gotoLine() }}
+        onExit={() => { void exitApp() }}
         saving={status === 'saving'}
       />
 
@@ -599,7 +680,7 @@ export default function App() {
             {active && <span>{words.words} 词 / {words.chars} 字</span>}
             <span className="status-flex" />
             <span className="lib-path" title={isTauri() ? (getLibraryRootCache() || '未选择笔记库') : '浏览器 localStorage'}>
-              {isTauri() ? (getLibraryRootCache() || '📁 未选择笔记库（点击顶栏 📁 选择）') : '浏览器预览 · localStorage'}
+              {isTauri() ? (getLibraryRootCache() || '📁 未选择笔记库（菜单 文件 → 打开笔记库）') : '浏览器预览 · localStorage'}
             </span>
           </div>
         </div>
@@ -625,14 +706,14 @@ export default function App() {
           onClose={() => setModal('none')}
         />
       )}
-      {(modal === 'settings' || modal === 'sync') && (
+      {(modal === 'settings' || modal === 'sync' || modal === 'plugins') && (
         <SettingsModal
           settings={settings}
           onChange={patchSettings}
           panels={pluginPanels}
           onReloadExternal={reloadExternal}
           onClose={() => setModal('none')}
-          initialSection={modal === 'sync' ? 'sync' : undefined}
+          initialSection={modal === 'sync' ? 'sync' : modal === 'plugins' ? 'plugins' : undefined}
         />
       )}
       {modal === 'about' && <AboutModal onClose={() => setModal('none')} />}

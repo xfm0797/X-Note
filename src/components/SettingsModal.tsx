@@ -17,8 +17,8 @@ interface Props {
   panels: PluginSettingsPanel[]
   onReloadExternal(): void
   onClose(): void
-  /** 打开时定位到指定区块（'sync' → 滚动到云同步面板） */
-  initialSection?: 'sync'
+  /** 打开时定位到指定区块（'sync' → 云同步面板；'plugins' → 外部插件区） */
+  initialSection?: 'sync' | 'plugins'
 }
 
 export function SettingsModal(p: Props) {
@@ -26,12 +26,18 @@ export function SettingsModal(p: Props) {
   const [extBusy, setExtBusy] = useState(false)
   const [pluginDir, setPluginDir] = useState<string>('')
 
-  // 定位到指定区块（如菜单「设置 → 同步」直接滚到云同步面板）
+  // 定位到指定区块（菜单「设置 → 同步」「插件 → 插件中心」直达）
   useEffect(() => {
-    if (p.initialSection !== 'sync') return
+    if (!p.initialSection) return
     const t = setTimeout(() => {
-      const el = [...document.querySelectorAll('.plugin-panel-title')]
-        .find(e => (e.textContent || '').includes('云同步'))
+      let el: Element | undefined
+      if (p.initialSection === 'sync') {
+        el = [...document.querySelectorAll('.plugin-panel-title')]
+          .find(e => (e.textContent || '').includes('云同步'))
+      } else {
+        el = [...document.querySelectorAll('.settings-section .section-title')]
+          .find(e => (e.textContent || '').includes('外部插件'))
+      }
       el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 120)
     return () => clearTimeout(t)

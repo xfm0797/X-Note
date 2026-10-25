@@ -88,6 +88,24 @@ button { font-family: inherit; }
 .dropdown-menu div.dropdown-sep { height: 1px; padding: 0; margin: 4px 6px; background: var(--border); cursor: default; }
 .dropdown-menu div.dropdown-sep:hover { background: var(--border); }
 
+/* ===== 菜单栏（Notepad++ 风格） ===== */
+.menubar { gap: 2px; padding: 4px 8px; }
+.menubar-item { flex-shrink: 0; }
+.menu-btn {
+  border: none; background: transparent; color: var(--text);
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.menubar-item:hover .menu-btn,
+.menubar-item:hover { background: var(--bg-hover); border-radius: 6px; }
+.menubar-menu { min-width: 240px; }
+.menu-item { display: flex; align-items: center; padding: 7px 10px; cursor: pointer; border-radius: 6px; white-space: nowrap; }
+.menu-item:hover { background: var(--bg-hover); }
+.menu-item.disabled { opacity: .5; cursor: default; }
+.menu-item.disabled:hover { background: transparent; }
+.menu-check { width: 18px; flex-shrink: 0; color: var(--accent); }
+.menu-label { flex: 1; }
+.menu-hint { margin-left: 24px; color: var(--text-secondary); font-size: 11px; }
+
 /* ===== 主区 ===== */
 .main { flex: 1; display: flex; min-height: 0; }
 
