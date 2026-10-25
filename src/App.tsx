@@ -17,6 +17,7 @@ import { Preview } from './components/Preview'
 import { GraphModal, type GraphNode, type GraphEdge } from './components/GraphModal'
 import { HistoryModal } from './components/HistoryModal'
 import { AboutModal } from './components/AboutModal'
+import { HelpModal } from './components/HelpModal'
 import { SettingsModal } from './components/SettingsModal'
 import { PluginsModal } from './components/PluginsModal'
 import { SyncModal } from './components/SyncModal'
@@ -51,7 +52,7 @@ export default function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
   const [status, setStatus] = useState<'saved' | 'saving'>('saved')
-  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'about'>('none')
+  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'about' | 'help'>('none')
   const [scrollTarget, setScrollTarget] = useState<string | null>(null)
   const [, forceRender] = useState(0)
   // 插件
@@ -598,6 +599,7 @@ export default function App() {
         onOpenSync={() => setModal('sync')}
         onOpenPlugins={() => setModal('plugins')}
         onOpenAbout={() => setModal('about')}
+        onOpenHelp={() => setModal('help')}
         onNewNote={() => { void createNote(active ? active.split('/').slice(0, -1).join('/') : '') }}
         onImportFiles={importFiles}
         onOpenLibrary={onSelectFolder}
@@ -729,6 +731,7 @@ export default function App() {
         />
       )}
       {modal === 'about' && <AboutModal onClose={() => setModal('none')} />}
+      {modal === 'help' && <HelpModal onClose={() => setModal('none')} />}
 
       {/* 应用内对话框 + 全局 Toast（替代原生 prompt/confirm/alert） */}
       <DialogHost />

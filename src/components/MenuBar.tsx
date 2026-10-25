@@ -20,6 +20,7 @@ interface Props {
   onOpenSync(): void
   onOpenPlugins(): void
   onOpenAbout(): void
+  onOpenHelp(): void
   onNewNote(): void
   onImportFiles(files: FileList | null): void
   onOpenLibrary(): void
@@ -128,6 +129,7 @@ export function MenuBar(p: Props) {
       {menu('设置', <>
         {item('设置…', p.onOpenSettings)}
         {item('切换主题（当前：' + (p.theme === 'dark' ? '深色' : '浅色') + '）', p.onToggleTheme)}
+        {item('帮助…', p.onOpenHelp)}
         <div className="dropdown-sep" />
         {item('关于 X-Note…', p.onOpenAbout)}
       </>)}

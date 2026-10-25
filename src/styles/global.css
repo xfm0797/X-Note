@@ -76,6 +76,18 @@ button { font-family: inherit; }
 }
 .view-switch button.active { background: var(--accent); color: var(--accent-text); }
 
+/* ===== Markdown 帮助弹窗 ===== */
+.help-modal { width: 720px; }
+.help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.help-src {
+  margin: 0; background: var(--code-bg); border-radius: 8px; padding: 10px 12px;
+  font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+}
+.help-preview { padding: 6px 10px; border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; min-height: 30px; overflow-x: auto; }
+.help-preview h1, .help-preview h2, .help-preview h3, .help-preview h4 { font-size: 1.05em; border: none; margin: .3em 0; }
+.help-preview > *:first-child { margin-top: 0; }
+.help-preview > *:last-child { margin-bottom: 0; }
+
 /* ===== 常用工具栏（菜单栏下方） ===== */
 .toolbar { gap: 2px; padding: 3px 10px; }
 .toolbar .tb-btn { display: flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 4px 9px; white-space: nowrap; }
