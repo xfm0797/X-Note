@@ -4,6 +4,7 @@ import type { PluginSettingsPanel } from '../plugins/types'
 import {
   scanExternalPlugins, removeExternalPlugin, setExternalDisabled,
   installZipPlugin, installFromMarket, fetchMarketIndex, getMarketUrl, setMarketUrl, DEFAULT_MARKET_URL,
+  compareVersion,
   type ExternalPluginEntry, type MarketEntry
 } from '../plugins/external'
 import { askConfirm, appToast } from './AskModal'
@@ -27,9 +28,16 @@ export function PluginsModal(p: Props) {
   // 插件中心
   const [marketUrl, setMarketUrlState] = useState(getMarketUrl())
   const [marketList, setMarketList] = useState<MarketEntry[] | null>(null)
+  const [marketSource, setMarketSource] = useState('')
   const [marketErr, setMarketErr] = useState('')
   const [marketBusy, setMarketBusy] = useState(false)
   const [installingId, setInstallingId] = useState('')
+
+  /** 已安装版本表（插件中心用来显示「已是最新 / 可更新 / 未安装」） */
+  const installed = new Map<string, string>()
+  for (const e of extList || []) {
+    if (e.manifest?.id) installed.set(e.manifest.id, e.manifest.version)
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -73,10 +81,16 @@ export function PluginsModal(p: Props) {
   const loadMarket = async (url = marketUrl) => {
     setMarketBusy(true); setMarketErr('')
     try {
-      setMarketList(await fetchMarketIndex(url))
+      const r = await fetchMarketIndex(url)
+      setMarketList(r.list)
+      setMarketSource(r.source)
+      if (r.failed.length) {
+        appToast(`默认源不可用，已自动切到备用源（${new URL(r.source).host}）`, 'info')
+      }
     } catch (e) {
       setMarketList(null)
-      setMarketErr(String(e).replace(/^Error:\s*/, '') + '（GitHub/Gitee raw 均支持跨域；Gitee 注意仓库需公开）')
+      setMarketSource('')
+      setMarketErr(String(e).replace(/^Error:\s*/, ''))
     } finally { setMarketBusy(false) }
   }
   const installMarket = async (entry: MarketEntry) => {
@@ -160,9 +174,14 @@ export function PluginsModal(p: Props) {
           <div className="panel-warn">安全提示：外部插件以应用的完整权限执行代码，请仅安装信任来源的插件。</div>
         </div>
 
-        <div className="settings-section">
+          <div className="settings-section">
           <div className="section-title">插件中心
             <button className="mini-btn" disabled={marketBusy} onClick={() => void loadMarket()}>{marketBusy ? '加载中…' : '↻ 刷新列表'}</button>
+            {marketList && !marketBusy && (
+              <span className="market-meta">
+                {marketList.length} 个插件 · 来自 {new URL(marketSource || DEFAULT_MARKET_URL).host}
+              </span>
+            )}
           </div>
           <div className="market-url">
             <input value={marketUrl} onChange={e => setMarketUrlState(e.target.value)}
@@ -173,22 +192,32 @@ export function PluginsModal(p: Props) {
           <div className="panel-help">
             自建插件中心：新建一个 GitHub / Gitee 公开仓库，放入 <code>index.json</code>（数组，每项含 id / name / version / zip 下载地址），
             把各插件的 .zip 上传到仓库 Release 或直接提交到仓库，把 raw 地址填到上面即可。
+            每次「刷新列表」都会绕过 CDN 缓存重新拉取（jsDelivr 默认缓存 7 天）；默认源不可用时会自动切到备用源。
           </div>
           {marketErr && <div className="panel-warn">{marketErr}</div>}
           <ul className="ext-list">
-            {(marketList || []).map(entry => (
-              <li key={entry.id}>
-                <div>
-                  <b>{entry.name}</b> <span className="ext-ver">v{entry.version}</span>
-                  {entry.author && <span className="ext-ok"> · {entry.author}</span>}
-                  <div className="ext-desc">{entry.description}</div>
-                </div>
-                <button className="mini-btn primary" disabled={installingId === entry.id}
-                  onClick={() => void installMarket(entry)}>
-                  {installingId === entry.id ? '安装中…' : '安装'}
-                </button>
-              </li>
-            ))}
+            {(marketList || []).map(entry => {
+              const have = installed.get(entry.id)
+              const canUpdate = !!have && compareVersion(entry.version, have) > 0
+              return (
+                <li key={entry.id}>
+                  <div>
+                    <b>{entry.name}</b> <span className="ext-ver">v{entry.version}</span>
+                    {entry.author && <span className="ext-ok"> · {entry.author}</span>}
+                    {have
+                      ? (canUpdate
+                        ? <span className="ext-badge-new"> · 可更新（已装 v{have}）</span>
+                        : <span className="ext-badge-ok"> · 已安装</span>)
+                      : <span className="ext-badge-new"> · 未安装</span>}
+                    <div className="ext-desc">{entry.description}</div>
+                  </div>
+                  <button className="mini-btn primary" disabled={installingId === entry.id}
+                    onClick={() => void installMarket(entry)}>
+                    {installingId === entry.id ? '安装中…' : canUpdate ? '更新' : have ? '重装' : '安装'}
+                  </button>
+                </li>
+              )
+            })}
             {marketList && !marketList.length && <li className="empty">插件中心为空</li>}
             {!marketList && !marketBusy && !marketErr && <li className="empty">点击「刷新列表」从插件中心拉取可安装插件</li>}
           </ul>

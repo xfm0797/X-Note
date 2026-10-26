@@ -186,6 +186,37 @@ export interface MarketEntry {
 const MARKET_URL_KEY = 'xnote:market-url'
 export const DEFAULT_MARKET_URL = 'https://cdn.jsdelivr.net/gh/xfm0797/X-Note-Plugins@main/index.json'
 
+/**
+ * 备用源：默认源拉不到（或返回的不是合法索引）时按顺序再试。
+ * - Gitee raw：国内直连快，但不返回 Access-Control-Allow-Origin，只有桌面端（Rust 侧请求）能用
+ * - GitHub raw：境外可用，国内常被墙
+ */
+export const MARKET_FALLBACKS = [
+  'https://gitee.com/xfm0797/x-note-plugins/raw/main/index.json',
+  'https://raw.githubusercontent.com/xfm0797/X-Note-Plugins/main/index.json'
+]
+
+/**
+ * 统一出口：桌面端走 Rust 侧请求（无 CORS 限制），Web 预览退回 fetch。
+ * 插件中心索引 / 插件包下载都走这里，Gitee raw 这类没有 CORS 头的源才能用。
+ */
+async function netFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  if (isTauri()) {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
+    return (await tauriFetch(url, init as any)) as unknown as Response
+  }
+  return fetch(url, init)
+}
+
+/**
+ * 绕过 HTTP 缓存：jsDelivr 给 index.json 的是 max-age=604800（7 天），
+ * WebView 会把旧索引缓存一星期，点「刷新列表」也只会命中缓存 —— 所以必须换 URL 键。
+ */
+function bustCache(url: string): string {
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}_t=${Date.now()}`
+}
+
 export function getMarketUrl(): string {
   return localStorage.getItem(MARKET_URL_KEY) || DEFAULT_MARKET_URL
 }
@@ -193,22 +224,60 @@ export function setMarketUrl(url: string) {
   localStorage.setItem(MARKET_URL_KEY, url.trim())
 }
 
-/** 拉取插件中心索引（index.json） */
-export async function fetchMarketIndex(url: string): Promise<MarketEntry[]> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' } })
-  if (!res.ok) throw new Error(`索引拉取失败：HTTP ${res.status}`)
-  const data = await res.json()
-  const list = Array.isArray(data) ? data : data.plugins
-  if (!Array.isArray(list)) throw new Error('索引格式不符：需要数组或 { plugins: [...] }')
-  return list.filter(e => e && e.id && e.zip)
+export interface MarketResult {
+  list: MarketEntry[]
+  /** 实际生效的源 */
+  source: string
+  /** 失败过的源与原因 */
+  failed: { url: string; error: string }[]
 }
 
-/** 从插件中心安装（下载 zip → 走 installZipPlugin 流程） */
+/** 拉取插件中心索引（index.json）：强刷缓存 + 多源回退 */
+export async function fetchMarketIndex(url: string): Promise<MarketResult> {
+  const candidates = [url, ...MARKET_FALLBACKS.filter(u => u !== url)]
+  const failed: { url: string; error: string }[] = []
+
+  for (const candidate of candidates) {
+    try {
+      const res = await netFetch(bustCache(candidate), { headers: { Accept: 'application/json' } })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const text = await res.text()
+      let data: any
+      try { data = JSON.parse(text) } catch { throw new Error('返回的不是 JSON（可能被网络劫持或地址写错）') }
+      const list = Array.isArray(data) ? data : data?.plugins
+      if (!Array.isArray(list)) throw new Error('索引格式不符：需要数组或 { plugins: [...] }')
+      return { list: list.filter((e: any) => e && e.id && e.zip) as MarketEntry[], source: candidate, failed }
+    } catch (e) {
+      failed.push({ url: candidate, error: String(e).replace(/^Error:\s*/, '') })
+    }
+  }
+
+  const detail = failed.map(f => `${hostOf(f.url)}：${f.error}`).join('；')
+  throw new Error(`所有插件源都不可用（${detail}）`)
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).host } catch { return url }
+}
+
+/** 从插件中心安装（下载 zip → 走 installZipPlugin 流程），同样强刷缓存 */
 export async function installFromMarket(entry: MarketEntry): Promise<ZipInstallResult> {
-  const res = await fetch(entry.zip)
+  const res = await netFetch(bustCache(entry.zip))
   if (!res.ok) throw new Error(`插件包下载失败：HTTP ${res.status}`)
   const buf = new Uint8Array(await res.arrayBuffer())
   return installZipPlugin(buf)
+}
+
+/** 版本比较：a > b 返回正数 */
+export function compareVersion(a: string, b: string): number {
+  const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0)
+  const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0)
+    if (d) return d
+  }
+  return 0
 }
 
 /** Web 模式：演示插件源码（等价于 xnote-external-plugins/hello-world/main.js） */
