@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "fs（笔记库读写）+ dialog（文件夹选择）+ shell（执行 git）",
+  "description": "fs（笔记库读写）+ dialog（文件夹选择）+ shell（执行 git）+ http（插件调用外部 API，如 AI 接口）",
   "windows": ["main", "xnote-win-*"],
   "permissions": [
     "fs:default",
@@ -26,6 +26,15 @@
     },
     { "identifier": "shell:default" },
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://**" },
+        { "url": "https://**/*" },
+        { "url": "http://**" },
+        { "url": "http://**/*" }
+      ]
+    }
   ]
 }
