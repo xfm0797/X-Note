@@ -2,10 +2,10 @@
 
 本地优先的 Windows 桌面端 Markdown 笔记软件。笔记即标准 .md 文件，离线可用、隐私无忧。
 
-- **技术栈**：Tauri 2（Rust 外壳 + fs/dialog/shell 插件）+ React 18 + TypeScript + Vite
+- **技术栈**：Tauri 2（Rust 外壳 + fs/dialog/shell/http 插件）+ React 18 + TypeScript + Vite
 - **体积**：桌面安装包仅约数 MB（Rust 内核 + 系统 WebView2，无内嵌浏览器）
 - **开发者**：[XFM](https://www.lovou.pw) · GitHub [@xfm0797](https://github.com/xfm0797)
-- **核心特性**：Markdown 实时预览、本地笔记库与文件树、全文搜索、文档大纲、自动保存、导入/导出（PDF/HTML/MD）、亮/暗主题、设置面板、KaTeX 数学公式、Mermaid 流程图、双向链接 `[[笔记]]`、反链面板、关系图谱、标签分类、拖拽排序、插件系统（内置云同步插件【WebDAV / 本地镜像 / Git 后端 + 冲突解决面板】+ 外部插件目录动态加载，含 GitHub / Gitee Gist 备份官方插件与 hello-world 开发样板及开发文档）、多窗口、版本历史与 diff 对比、多窗口布局记忆、标签页（可拖拽排序）、编辑器增强、关于（开发者 XFM）
+- **核心特性**：Markdown 实时预览、本地笔记库与文件树、全文搜索、文档大纲、自动保存、导入/导出（PDF/HTML/MD）、亮/暗主题、设置面板、KaTeX 数学公式、Mermaid 流程图、双向链接 `[[笔记]]`、反链面板、关系图谱、标签分类、拖拽排序、插件系统（内置云同步插件【WebDAV / 本地镜像 / Git 后端 + 冲突解决面板】+ 外部插件目录动态加载，含 GitHub / Gitee Gist 备份、AI 写作助手等官方插件与 hello-world 开发样板及开发文档）、多窗口、版本历史与 diff 对比、多窗口布局记忆、标签页（可拖拽排序）、编辑器增强、关于（开发者 XFM）
 
 ## 一、两种运行模式
 
@@ -93,8 +93,10 @@ X-Note/
 │   │   ├── assets.ts            # 图片资源保存（Tauri 写 assets/，Web 转 dataURL）
 │   │   └── window.ts            # 多窗口（URL 参数打开指定笔记并继承布局）
 │   ├── plugins/                 # 插件系统
-│   │   ├── types.ts             # 插件契约（PluginContext / XNotePlugin / Command / SettingsPanel）
+│   │   ├── types.ts             # 插件契约（PluginContext / EditorApi / HttpApi / PluginDialog）
 │   │   ├── host.ts              # 插件宿主（注册表 + UI API + 命令归属跟踪）
+│   │   ├── editor-api.ts        # ctx.editor 实现（当前笔记读写 / 选区替换 / 内容订阅）
+│   │   ├── net.ts               # ctx.http 实现（桌面端经 Rust 发起，绕开 WebView CORS）
 │   │   ├── registry.ts          # 内置插件注册表
 │   │   ├── external.ts          # 外部插件目录动态加载（.xnote-plugins/ + Blob URL import）
 │   │   └── cloud-sync/          # 云同步插件
@@ -103,7 +105,7 @@ X-Note/
 │   │       ├── ConflictModal.tsx # 冲突解决面板（本地版/远端版/都保留）
 │   │       └── providers/       # webdav.ts / localFolder.ts / git.ts
 │   └── components/
-│       ├── Topbar.tsx           # 顶栏（视图切换、导出、主题、设置、插件命令、图谱、侧栏折叠、关于）
+│       ├── MenuBar.tsx          # 菜单栏（文件/编辑/搜索/视图/插件/设置）+ 常用工具按钮行
 │       ├── Sidebar.tsx          # 侧边栏（库名、搜索、文件树、标签、大纲、反链）
 │       ├── FileTree.tsx         # 文件树（展开/选中/重命名/删除/拖拽排序）
 │       ├── TabBar.tsx           # 标签栏（多笔记标签，可拖拽排序）
@@ -112,7 +114,9 @@ X-Note/
 │       ├── GraphModal.tsx       # 关系图谱（力导引 SVG）
 │       ├── HistoryModal.tsx     # 版本历史面板（快照/查看/diff/恢复）
 │       ├── AboutModal.tsx       # 关于对话框
-│       └── SettingsModal.tsx    # 设置面板（含插件设置分区与外部插件管理）
+│       ├── HelpModal.tsx        # 帮助（Markdown 语法速查）
+│       ├── PluginModal.tsx      # 插件自定义弹窗外壳（ctx.ui.showDialog 渲染端）
+│       └── SettingsModal.tsx    # 设置面板（外观、自动更新）
 └── src-tauri/                   # Tauri 桌面端外壳（Rust）
     ├── Cargo.toml
     ├── tauri.conf.json
@@ -142,7 +146,8 @@ xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist
 - [x] 关系图谱：顶栏「图谱」打开全库关系图（基于 `[[链接]]`，力导引布局）；节点大小随连接数增长，当前笔记及邻居高亮、孤立笔记灰色；滚轮缩放、节点拖拽、单击跳转
 - [x] 标签分类：正文 `#标签` 自动汇总，侧边栏点击按标签筛选（支持中文标签；标题行与代码块内不识别）
 - [x] 拖拽排序 / 移动：文件树内拖拽重排顺序、拖入文件夹；顺序持久化，重启保持一致
-- [x] 插件系统：内置注册式插件宿主，插件可注册顶栏命令、设置面板，访问存储/设置/UI 提示能力
+- [x] 插件系统：内置注册式插件宿主，插件可注册菜单命令、设置面板，访问存储/设置/编辑器/网络/自定义弹窗等能力
+- [x] 插件 API 扩展（v0.3.0）：`ctx.editor`（读取当前笔记与选区、替换选区/插入/替换全文、内容订阅）、`ctx.http`（桌面端经 Rust 侧请求，绕开 WebView CORS）、`ctx.ui.showDialog`（插件自己的弹窗）
 - [x] 云同步插件：WebDAV / 本地文件夹镜像 / Git 三种后端；冲突面板逐项裁决（保留本地版 / 远端版 / 都保留），不再静默覆盖
 - [x] 多窗口：顶栏「新窗」在当前笔记的独立窗口中打开，URL 参数定位笔记
 - [x] 多窗口布局记忆：侧栏可折叠、可拖拽调宽（180–480px），布局随设置持久化并经 URL 参数传给新窗口
@@ -154,7 +159,7 @@ xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist
 - [x] .zip 插件包安装：「设置 → 外部插件 → 安装 .zip 插件包」自动解压放入插件目录（含嵌套目录/覆盖安装/非法包校验）
 - [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装；自建插件源只需一个公开仓库（见「插件系统」章节）
 - [x] 自动更新：基于 Tauri updater（minisign 签名校验 + latest.json 清单），「设置 → 自动更新」检查 / 下载 / 安装 / 重启，配置说明见「自动更新」章节
-- [x] 官方外部插件：GitHub / Gitee Gist 备份 + hello-world 样板（`xnote-external-plugins/`）
+- [x] 官方外部插件：GitHub / Gitee Gist 备份、AI 写作助手、全库待办看板、批量查找替换、链接健康检查 + hello-world 样板（插件中心一键安装，源码在 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)）
 - [x] 关于：顶栏「关于」展示软件信息与开发者 XFM 主页（www.lovou.pw）与 GitHub（@xfm0797）
 - [x] 编辑器增强：
   - 格式工具条：加粗 / 斜体 / 删除线 / 行内代码 / H1–H3 / 链接 / 无序·有序·任务列表 / 引用 / 代码块
@@ -195,7 +200,41 @@ interface XNotePlugin {
 }
 ```
 
-`PluginContext` 四类能力：`ctx.storage`（读写笔记库）、`ctx.settings`（独立设置，按 key 命名空间隔离）、`ctx.ui`（registerCommand / registerSettingsPanel / showToast）、`ctx.log`。
+`PluginContext` 能力分区：
+
+| 能力 | 说明 |
+| --- | --- |
+| `ctx.storage` | 读写笔记库（`loadAll / readFile / writeFile / deletePath / reloadLibrary`） |
+| `ctx.editor` | 当前编辑器：`active() / getContent() / setContent() / getSelection() / replaceSelection() / insertText() / replaceRange() / select() / focus() / onChange()` |
+| `ctx.http` | 网络请求：`request() / postJSON() / getJSON()`（桌面端在 Rust 侧发出，不受 WebView CORS 限制） |
+| `ctx.settings` | 插件独立设置，按 `xnote:plugin:<插件id>:<key>` 命名空间隔离 |
+| `ctx.ui` | `registerCommand`（插件菜单项）/ `registerSettingsPanel`（插件中心面板）/ `showDialog`（插件自己的弹窗）/ `closeDialog` / `showToast` |
+| `ctx.log` | 带插件 id 前缀的控制台日志 |
+
+`ctx.editor` 的写入走应用同一条自动保存与历史快照链路（用户可用 Ctrl+Z 撤销），因此插件不必自己写文件：
+
+```js
+// 选中内容 + 生成结果替换回去（AI 写作助手的核心三步）
+const sel = ctx.editor.getSelection()          // { text, start, end }
+const out = await ctx.http.postJSON(url, body, { Authorization: 'Bearer ' + key })
+ctx.editor.replaceSelection(out.data.choices[0].message.content)
+
+// 只想追加：insertText / replaceRange；整篇重写：setContent / replaceRange(0, len, ...)
+ctx.editor.onChange(c => console.log('正文变化', c.length))   // 返回取消订阅函数
+```
+
+`ctx.ui.showDialog` 让插件拥有自己的窗口（宿主只提供外壳：标题、宽度、关闭、Esc）：
+
+```js
+ctx.ui.showDialog({
+  id: 'my-plugin',
+  title: '我的工具',
+  width: 720,
+  render: () => window.XNoteReact.createElement(MyPanel, { ctx })
+})
+```
+
+外部插件用 `ctx.http` 调第三方 API（OpenAI 兼容接口、WebDAV、图床等）：桌面端请求由 Rust 侧发出，绕开浏览器同源策略；浏览器预览模式退回 `fetch`，需要目标服务允许跨域。
 
 ### 云同步插件
 
@@ -205,6 +244,14 @@ interface XNotePlugin {
   - Git 仓库：笔记库即工作树，fetch 远端后逐文件比对，本地改动统一 add/commit/push（仅桌面端，需 git）
 - 同步引擎单文件决策为纯函数（可单测）；冲突弹面板逐项选择「保留本地版 / 保留远端版 / 都保留」（本地版另存为 `xxx.conflict.md`）
 - 使用：顶栏「同步」一键同步；冲突时引导至「设置 → 云同步」裁决
+
+### AI 写作助手（官方插件）
+
+插件中心安装「AI 写作助手」后，菜单「插件」下会出现 5 个入口：打开助手 / 润色选中内容 / 翻译选中内容 / 全文摘要 / 生成标题与标签。
+
+- **自带接口配置**：任意 OpenAI 兼容的 `/chat/completions` 服务，填 baseURL + API Key + 模型名即可（内置 DeepSeek / Kimi / 通义千问 / 智谱 GLM / OpenAI 预设，自建网关、Ollama 之类也能填）；「测试连接」当场验证 Key 与模型名
+- **写回方式**：结果可先手动修改，再「替换选区 / 插入到光标 / 替换全文」（替换全文需二次确认）；标题标签模式下可分别「应用标题」（替换或插入 H1）与「应用标签」（写到标题下一行，已存在的自动跳过）
+- **隐私**：Key 只存在本机 localStorage（`xnote:plugin:ai-writer:cfg`），请求直接从你的电脑发往你填的接口，不经过任何中转
 
 ### 外部插件目录（动态加载）
 
