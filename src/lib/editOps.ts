@@ -8,6 +8,9 @@ export type EditOp =
   | 'line-up'
   | 'line-down'
 
+/** 菜单可见的编辑操作：撤销/重做/全选走浏览器原生能力，其余交给 transformText */
+export type MenuEditOp = EditOp | 'undo' | 'redo' | 'select-all'
+
 /** 光标/选区所在行范围 [start, end)（不含行尾换行） */
 function lineBounds(text: string, pos: number): [number, number] {
   const start = text.lastIndexOf('\n', Math.max(0, pos - 1)) + 1

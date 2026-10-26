@@ -1,7 +1,7 @@
 // ===== 菜单栏（Notepad++ 风格：文件/编辑/搜索/视图/插件/设置） =====
 import React, { useRef } from 'react'
 import type { ViewMode } from '../types'
-import type { EditOp } from '../lib/editOps'
+import type { MenuEditOp } from '../lib/editOps'
 
 interface Props {
   view: ViewMode
@@ -25,7 +25,7 @@ interface Props {
   onImportFiles(files: FileList | null): void
   onOpenLibrary(): void
   onSave(): void
-  onEditOp(op: EditOp): void
+  onEditOp(op: MenuEditOp): void
   onFocusSearch(): void
   onGotoLine(): void
   onExit(): void
