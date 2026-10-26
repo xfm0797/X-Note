@@ -14,6 +14,8 @@ jobs:
       contents: write   # 允许向 main 推送 latest-cn.json 保持双端同步
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

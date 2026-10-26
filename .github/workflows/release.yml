@@ -12,6 +12,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 同步脚本要把 latest-cn.json 提交回 main；浅克隆会被远端拒收（shallow update not allowed）
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

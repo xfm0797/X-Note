@@ -69,7 +69,8 @@ else
   git remote remove gitee-mirror 2>/dev/null || true
   git remote add gitee-mirror "https://${OWNER}:${TOKEN}@gitee.com/${OWNER}/${REPO}.git"
   git push gitee-mirror HEAD:main || { echo "推送 Gitee main 失败"; exit 1; }
-  git push origin HEAD:main || { echo "推送 GitHub main 失败"; exit 1; }
+  # 推 GitHub 失败不算致命：Gitee 侧清单已就位，本地 rebase gitee/main 即可对齐双端历史
+  git push origin HEAD:main || echo "  ⚠ 推送 GitHub main 失败（历史已分叉，本地 git rebase gitee/main 后重推）"
 fi
 
 echo "==> Gitee 同步完成：https://gitee.com/${OWNER}/${REPO}/releases/tag/${TAG}"
