@@ -413,6 +413,16 @@ body.dark .dlg-menu-item.danger { color: #f87171; }
 .ext-err { color: var(--danger); }
 .ext-desc { color: var(--text-secondary); font-size: 11px; }
 
+/* 插件自定义弹窗（ctx.ui.showDialog）：标题栏右侧关闭按钮，正文可纵向滚动 */
+.plugin-modal { max-height: 84vh; display: flex; flex-direction: column; }
+.plugin-modal > .modal-title { display: flex; align-items: center; padding-right: 22px; position: relative; }
+.plugin-modal-close {
+  position: absolute; right: -6px; top: -2px; border: none; background: transparent;
+  color: var(--text-secondary); font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.plugin-modal-close:hover { background: var(--bg-hover); color: var(--text); }
+.plugin-modal-body { overflow-y: auto; }
+
 /* 冲突面板 */
 .conflict-modal { width: 860px; }
 .conflict-tip { color: var(--text-secondary); margin-bottom: 10px; font-size: 12px; }

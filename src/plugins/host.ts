@@ -5,7 +5,7 @@
 //    重载后迟到的注册（旧一轮加载流程的 activate 尚未完成）一律丢弃
 // 3. (owner, cmd/panel id) 去重 —— 插件内部重复注册同 id 也只保留一份
 import type { NoteMeta } from '../types'
-import type { PluginCommand, PluginContext, PluginSettingsPanel, XNotePlugin } from './types'
+import type { EditorApi, HttpApi, PluginCommand, PluginContext, PluginDialog, PluginSettingsPanel, XNotePlugin } from './types'
 import { isTauri } from '../lib/storage'
 
 export interface HostDeps {
@@ -19,6 +19,13 @@ export interface HostDeps {
   showToast(text: string, kind?: 'success' | 'error' | 'info'): void
   /** 宿主主动询问各面板是否刷新（用简单订阅实现） */
   notifyPanelsChanged(): void
+  /** ctx.editor：读写当前编辑器 */
+  editor: EditorApi
+  /** ctx.http：插件网络请求 */
+  http: HttpApi
+  /** 打开/关闭插件自定义弹窗 */
+  openDialog(dialog: PluginDialog): void
+  closeDialog(): void
 }
 
 export interface Host {
@@ -66,6 +73,8 @@ export function createHost(deps: HostDeps): Host {
           },
           reloadLibrary: () => deps.storage.reloadLibrary()
         },
+        editor: deps.editor,
+        http: deps.http,
         settings: {
           get: (key, def) => {
             try {
@@ -91,6 +100,11 @@ export function createHost(deps: HostDeps): Host {
             if (panels.some(p => p.owner === id && p.id === panel.id)) return
             panels.push({ ...panel, owner: id })
           },
+          showDialog: (dialog) => {
+            if (epoch !== myEpoch) return
+            deps.openDialog(dialog)
+          },
+          closeDialog: () => deps.closeDialog(),
           showToast: (text, kind) => deps.showToast(text, kind)
         },
         log: (...args) => console.log(`[plugin:${id}]`, ...args)

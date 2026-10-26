@@ -8,7 +8,7 @@ import { countWords } from './lib/editorFmt'
 import { pushSnapshot, listSnapshots } from './lib/history'
 import { doExport } from './lib/export'
 import { windowParams } from './lib/window'
-import { transformText, lineOffset, type EditOp } from './lib/editOps'
+import { transformText, lineOffset, type MenuEditOp } from './lib/editOps'
 import { MenuBar } from './components/MenuBar'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
@@ -22,8 +22,12 @@ import { SettingsModal } from './components/SettingsModal'
 import { PluginsModal } from './components/PluginsModal'
 import { SyncModal } from './components/SyncModal'
 import { DialogHost, askText, askConfirm, appToast } from './components/AskModal'
+import { PluginModal } from './components/PluginModal'
 import { createRegistry, } from './plugins/registry'
 import type { Host } from './plugins/host'
+import { createEditorApi, type EditorApiInternal } from './plugins/editor-api'
+import { httpApi } from './plugins/net'
+import type { PluginDialog } from './plugins/types'
 import { scanExternalPlugins, loadExternalPlugin, isExternalDisabled, setExternalDisabled } from './plugins/external'
 
 const SETTINGS_KEY = 'xnote:settings'
@@ -52,7 +56,7 @@ export default function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
   const [status, setStatus] = useState<'saved' | 'saving'>('saved')
-  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'about' | 'help'>('none')
+  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'about' | 'help' | 'plugin'>('none')
   const [scrollTarget, setScrollTarget] = useState<string | null>(null)
   const [, forceRender] = useState(0)
   // 插件
@@ -72,6 +76,38 @@ export default function App() {
     if (!h) return
     setPluginCommands(h.commands().map(c => ({ id: c.id, title: c.title, run: () => void c.run() })))
     setPluginPanels(h.panels().map(pp => ({ id: pp.id, title: pp.title, render: pp.render })))
+  }, [])
+
+  /* ---------- 插件桥接：ctx.editor（编辑器读写）+ 插件弹窗 ---------- */
+  const [pluginDialog, setPluginDialog] = useState<PluginDialog | null>(null)
+  // 编辑器快照（插件在事件回调里读取，effect 每次渲染后同步）
+  const editorStateRef = useRef<{ active: string | null; lib: Record<string, NoteMeta> }>({ active: null, lib: {} })
+  const lastActiveRef = useRef<string | null>(null)
+  const applyContentRef = useRef<(content: string, selStart?: number, selEnd?: number) => void>(() => {})
+  const editorApiRef = useRef<EditorApiInternal | null>(null)
+  if (!editorApiRef.current) {
+    editorApiRef.current = createEditorApi({
+      current: () => {
+        const { active: a, lib: l } = editorStateRef.current
+        const meta = a ? l[a] : undefined
+        return a && meta ? { path: a, title: stripMd(baseName(a)), content: meta.content } : null
+      },
+      apply: (content, s, e) => applyContentRef.current(content, s, e)
+    })
+  }
+  useEffect(() => {
+    editorStateRef.current = { active, lib }
+    // 切换笔记时通知插件（内容变化由 applyEditorContent 直接 emit，避免重复）
+    if (active !== lastActiveRef.current) {
+      lastActiveRef.current = active
+      editorApiRef.current?.emit(active ? lib[active]?.content ?? '' : '')
+    }
+  }, [active, lib])
+  const editorApi = editorApiRef.current as EditorApiInternal
+  // 插件弹窗关闭：稳定引用，避免每次渲染都让 PluginModal 重挂 Esc 监听
+  const closePluginDialog = useCallback(() => {
+    setPluginDialog(null)
+    setModal(m => (m === 'plugin' ? 'none' : m))
   }, [])
 
   /* ---------- 启动：加载库 + 插件 ---------- */
@@ -116,7 +152,11 @@ export default function App() {
           reloadLibrary: async () => { const l = await storage.loadAll(); setLib(l); return l }
         },
         showToast,
-        notifyPanelsChanged
+        notifyPanelsChanged,
+        editor: editorApi,
+        http: httpApi,
+        openDialog: (d) => { setPluginDialog(d); setModal('plugin') },
+        closeDialog: closePluginDialog
       })
       hostRef.current = host
       await regReady
@@ -375,21 +415,35 @@ export default function App() {
     return () => { window.removeEventListener('keydown', onKey); unlisten?.() }
   }, [])
 
-  const onEditorChange = useCallback((content: string, selStart?: number, selEnd?: number) => {
-    if (!active) return
-    setLib(l => ({ ...l, [active]: { content, updated: Date.now() } }))
-    scheduleSave(active, content)
-    // 选区恢复（工具条操作后）
-    if (selStart !== undefined && selEnd !== undefined) {
+  /**
+   * 统一的「写入编辑器」入口：手动输入、菜单编辑操作、插件 ctx.editor 全部走这里，
+   * 保证自动保存 / 历史快照 / 插件订阅三者行为一致。
+   */
+  const applyEditorContent = useCallback((content: string, selStart?: number, selEnd?: number) => {
+    const p = editorStateRef.current.active
+    if (!p) return
+    setLib(l => (l[p]?.content === content ? l : { ...l, [p]: { content, updated: Date.now() } }))
+    scheduleSave(p, content)
+    editorApiRef.current?.emit(content)
+    // 选区恢复（工具条 / 插件写入后）
+    if (selStart !== undefined) {
       requestAnimationFrame(() => {
         const el = document.querySelector<HTMLTextAreaElement>('.editor-textarea')
-        if (el) el.setSelectionRange(selStart, selEnd)
+        if (!el) return
+        // 插件弹窗打开时不抢焦点，只同步选区（用户可能还在弹窗里继续操作）
+        if (!document.querySelector('.plugin-modal')) el.focus()
+        el.setSelectionRange(selStart, selEnd ?? selStart)
       })
     }
-  }, [active, scheduleSave])
+  }, [scheduleSave])
+  applyContentRef.current = applyEditorContent
+
+  const onEditorChange = useCallback((content: string, selStart?: number, selEnd?: number) => {
+    applyEditorContent(content, selStart, selEnd)
+  }, [applyEditorContent])
 
   /* ---------- 菜单：编辑操作 / 视图缩放 / 跳转 / 搜索聚焦 / 退出 ---------- */
-  const runEditOp = useCallback((op: EditOp) => {
+  const runEditOp = useCallback((op: MenuEditOp) => {
     const el = document.querySelector<HTMLTextAreaElement>('.editor-textarea')
     if (!active || !el) { appToast('请先打开一篇笔记', 'info'); return }
     if (op === 'undo' || op === 'redo') {
@@ -745,6 +799,9 @@ export default function App() {
       )}
       {modal === 'about' && <AboutModal onClose={() => setModal('none')} />}
       {modal === 'help' && <HelpModal onClose={() => setModal('none')} />}
+      {modal === 'plugin' && pluginDialog && (
+        <PluginModal dialog={pluginDialog} onClose={closePluginDialog} />
+      )}
 
       {/* 应用内对话框 + 全局 Toast（替代原生 prompt/confirm/alert） */}
       <DialogHost />
