@@ -2,7 +2,9 @@
 
 本地优先的 Windows 桌面端 Markdown 笔记软件。笔记即标准 .md 文件，离线可用、隐私无忧。
 
-- **技术栈**：Tauri 2（Rust 外壳 + fs/dialog/shell/http 插件）+ React 18 + TypeScript + Vite
+**当前版本 v0.4.0** · 自动更新双源（GitHub / Gitee）· 插件中心可装可更新
+
+- **技术栈**：Tauri 2（Rust 外壳 + fs/dialog/shell/http/updater/process 插件）+ React 18 + TypeScript + Vite
 - **体积**：桌面安装包仅约数 MB（Rust 内核 + 系统 WebView2，无内嵌浏览器）
 - **开发者**：[XFM](https://www.lovou.pw) · GitHub [@xfm0797](https://github.com/xfm0797)
 - **核心特性**：Markdown 实时预览、本地笔记库与文件树、全文搜索、文档大纲、自动保存、导入/导出（PDF/HTML/MD）、亮/暗主题、设置面板、KaTeX 数学公式、Mermaid 流程图、双向链接 `[[笔记]]`、反链面板、关系图谱、标签分类、拖拽排序、插件系统（内置云同步插件【WebDAV / 本地镜像 / Git 后端 + 冲突解决面板】+ 外部插件目录动态加载，含 GitHub / Gitee Gist 备份、AI 写作助手等官方插件与 hello-world 开发样板及开发文档）、多窗口、版本历史与 diff 对比、多窗口布局记忆、标签页（可拖拽排序）、编辑器增强、关于（开发者 XFM）
@@ -37,11 +39,11 @@ npm run preview    # 预览生产构建（dist）
 - Rust 工具链（含 cargo）
 - WebView2 运行时（Win11 已内置；Win10 需安装）
 
-### 构建命令
+### 方式一：本机构建
 
 ```bash
 npm install
-npm run tauri:dev     # 开发模式，热重载，弹出水桌面窗口
+npm run tauri:dev     # 开发模式，热重载，弹出桌面窗口
 npm run tauri:build   # 生产构建，生成安装包
 ```
 
@@ -49,8 +51,9 @@ npm run tauri:build   # 生产构建，生成安装包
 
 ```
 src-tauri/target/release/bundle/
-├── nsis/X-Note_0.1.0_x64_zh-CN.exe   # Windows 安装程序（NSIS）
-└── msi/X-Note_0.1.0_x64_en-US.msi    # MSI 安装包
+├── nsis/X-Note_0.4.0_x64-setup.exe       # Windows 安装程序（NSIS，自动更新用这个）
+├── nsis/X-Note_0.4.0_x64-setup.exe.sig   # 更新签名（minisign）
+└── msi/X-Note_0.4.0_x64_en-US.msi        # MSI 安装包
 ```
 
 首次构建前，若图标缺失，可运行 `npm run tauri icon` 由源图 `src-tauri/icons/icon.png` 重新生成各平台图标。
@@ -59,14 +62,26 @@ src-tauri/target/release/bundle/
 
 ### 方式二：GitHub Actions 自动出包（推荐）
 
-仓库已内置 `.github/workflows/release.yml`，推送到 GitHub 后自动执行：
+仓库内置两个工作流：
 
-| 触发方式 | 行为 |
-| -------- | ---- |
-| 推送 `v*` 标签（如 `git tag v0.1.0 && git push origin v0.1.0`） | 在 Windows runner 上构建 .exe(NSIS) 与 .msi，上传 Artifact 并自动创建 GitHub Release 附带安装包 |
-| Actions 页手动 Run workflow | 仅构建并上传 Artifact，用于验证出包流程 |
+| 工作流 | 触发方式 | 行为 |
+| ------ | -------- | ---- |
+| `release.yml` | 推送 `v*` 标签（如 `git tag v0.4.0 && git push origin v0.4.0`） | Windows runner 构建 .exe(NSIS) 与 .msi → 生成 `latest.json` / `latest-cn.json` → 上传 Artifact → 创建 GitHub Release → 同步资产到 Gitee Release（国内备用更新源） |
+| `release.yml` | Actions 页手动 Run workflow | 仅构建并上传 Artifact，用于验证出包流程（不发布、不签名清单） |
+| `sync-gitee.yml` | 手动 Run workflow，填 tag | 只重跑「Gitee 备用源同步」，用于同步失败后补救 |
 
-工作流步骤：Checkout → Node 20 → Rust stable → cargo 缓存 → `npm ci` → `npm run tauri:build` → 上传产物 →（标签时）发布 Release。无需额外 secret（Release 使用内置 GITHUB_TOKEN）。
+`release.yml` 步骤：Checkout（`fetch-depth: 0`）→ Node 20 → Rust stable → cargo 缓存 → `npm ci` → `npm run tauri:build`（带签名密钥）→ `node scripts/gen-latest.mjs <tag>` → 上传产物 → 发布 GitHub Release → `scripts/sync-gitee.sh <tag>` 推送 Gitee。
+
+需要配置的仓库 Secrets：
+
+| Secret | 用途 | 缺失后果 |
+| ------ | ---- | -------- |
+| `TAURI_SIGNING_PRIVATE_KEY` | 更新包 minisign 私钥（完整内容） | 构建在签名步骤失败（`createUpdaterArtifacts: true` 必须有密钥） |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 私钥密码（当前密钥为空密码，可留空） | 有密码的密钥无法解密 |
+| `GITEE_TOKEN` | 推送 Gitee Release（需 `projects` 权限） | Gitee 同步步骤失败（`continue-on-error`，不影响 GitHub 主发布） |
+
+GitHub Release 使用内置 `GITHUB_TOKEN`，无需额外配置。
+
 
 ## 四、项目结构
 
@@ -76,6 +91,7 @@ X-Note/
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
+├── latest-cn.json               # Gitee 备用更新清单（CI 自动回写，保持与发版一致）
 ├── src/
 │   ├── main.tsx                 # 入口
 │   ├── App.tsx                  # 主逻辑（状态、自动保存、搜索、主题、导入导出、插件宿主接入）
@@ -89,16 +105,18 @@ X-Note/
 │   │   ├── history.ts           # 版本历史（快照记录/预算裁剪，Web 与 Tauri 双后端）
 │   │   ├── diff.ts              # 行级 diff（LCS + 粗粒度回退，纯函数可单测）
 │   │   ├── editorFmt.ts         # 编辑器格式化纯函数（加粗/标题/列表/链接/续写/字数统计）
+│   │   ├── editOps.ts           # 编辑器命令执行器（菜单/快捷键统一入口）
 │   │   ├── tabs.ts              # 标签页顺序操作（moveTab 纯函数）
 │   │   ├── assets.ts            # 图片资源保存（Tauri 写 assets/，Web 转 dataURL）
+│   │   ├── updater.ts           # 自动更新封装（检查 / 下载安装 / 重启）
 │   │   └── window.ts            # 多窗口（URL 参数打开指定笔记并继承布局）
 │   ├── plugins/                 # 插件系统
 │   │   ├── types.ts             # 插件契约（PluginContext / EditorApi / HttpApi / PluginDialog）
-│   │   ├── host.ts              # 插件宿主（注册表 + UI API + 命令归属跟踪）
+│   │   ├── host.ts              # 插件宿主（注册表 + UI API + 命令归属跟踪 + 重载去重）
 │   │   ├── editor-api.ts        # ctx.editor 实现（当前笔记读写 / 选区替换 / 内容订阅）
 │   │   ├── net.ts               # ctx.http 实现（桌面端经 Rust 发起，绕开 WebView CORS）
+│   │   ├── external.ts          # 外部插件：目录扫描 / Blob import / .zip 安装 / 插件中心索引与下载
 │   │   ├── registry.ts          # 内置插件注册表
-│   │   ├── external.ts          # 外部插件目录动态加载（.xnote-plugins/ + Blob URL import）
 │   │   └── cloud-sync/          # 云同步插件
 │   │       ├── index.tsx        # 插件入口：「同步」命令 + 设置面板（含冲突面板接线）
 │   │       ├── sync.ts          # 同步引擎（决策/冲突收集/裁决应用，纯函数可单测）
@@ -113,19 +131,26 @@ X-Note/
 │       ├── Preview.tsx          # 实时预览（代码高亮 + Mermaid + 双向链接）
 │       ├── GraphModal.tsx       # 关系图谱（力导引 SVG）
 │       ├── HistoryModal.tsx     # 版本历史面板（快照/查看/diff/恢复）
-│       ├── AboutModal.tsx       # 关于对话框
-│       ├── HelpModal.tsx        # 帮助（Markdown 语法速查）
+│       ├── PluginsModal.tsx     # 插件中心（已安装 + 插件源 + .zip 安装 + 安装/更新/卸载）
+│       ├── PluginSettingsModal.tsx # 插件设置（只放各插件 registerSettingsPanel 的面板）
 │       ├── PluginModal.tsx      # 插件自定义弹窗外壳（ctx.ui.showDialog 渲染端）
-│       └── SettingsModal.tsx    # 设置面板（外观、自动更新）
-└── src-tauri/                   # Tauri 桌面端外壳（Rust）
-    ├── Cargo.toml
-    ├── tauri.conf.json
-    ├── capabilities/default.json
-    ├── build.rs
-    ├── src/main.rs
-    └── icons/
-xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist / hello-world + 开发文档）
-.github/workflows/release.yml    # Windows CI：自动构建 .exe/.msi 并发布 Release
+│       ├── SyncModal.tsx        # 云同步（后端配置 / 一键同步 / 冲突入口）
+│       ├── AskModal.tsx         # 通用确认框与全局 Toast
+│       ├── SettingsModal.tsx    # 设置面板（外观、自动更新）
+│       ├── AboutModal.tsx       # 关于对话框
+│       └── HelpModal.tsx        # 帮助（Markdown 语法速查）
+├── scripts/
+│   ├── gen-latest.mjs           # 生成 latest.json / latest-cn.json（GitHub / Gitee 双源清单）
+│   └── sync-gitee.sh            # 把安装包 + 签名 + 清单推到 Gitee Release
+├── src-tauri/                   # Tauri 桌面端外壳（Rust）
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── capabilities/default.json
+│   ├── build.rs
+│   ├── src/main.rs
+│   └── icons/
+├── xnote-external-plugins/      # 官方外部插件源码（github-gist / gitee-gist / hello-world + 开发指南）
+└── .github/workflows/           # release.yml（构建发布）/ sync-gitee.yml（备用源补救）
 ```
 
 ## 五、功能清单
@@ -140,7 +165,7 @@ xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist
 - [x] 亮 / 暗主题（可设为跟随系统）
 - [x] 设置面板（主题、字号、默认导出格式、字体）
 - [x] 数学公式（KaTeX）：行内 `$E=mc^2$`，块级 `$$...$$`
-- [x] 流程图（Mermaid）：```mermaid 代码块自动渲染为图
+- [x] 流程图（Mermaid）：`` ```mermaid `` 代码块自动渲染为图
 - [x] 双向链接：`[[笔记名]]` 或 `[[笔记名|别名]]`，点击跳转到同名笔记
 - [x] 反链面板：侧边栏展示引用当前笔记的全部笔记（含上下文片段、计数徽标；自引用自动过滤）
 - [x] 关系图谱：顶栏「图谱」打开全库关系图（基于 `[[链接]]`，力导引布局）；节点大小随连接数增长，当前笔记及邻居高亮、孤立笔记灰色；滚轮缩放、节点拖拽、单击跳转
@@ -155,12 +180,15 @@ xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist
 - [x] 版本 diff 对比：「对比当前」做行级对比（LCS，超大文本自动降级粗粒度），新增绿色 / 删除红色并统计增删行数
 - [x] 标签页：多笔记标签、点击切换、✕ 关闭；状态按窗口记忆（sessionStorage）+ 全局回退（localStorage）；重命名/移动/删除时同步
 - [x] 标签页拖拽排序：拖拽调整顺序，顺序随标签状态持久化
-- [x] 外部插件目录动态加载：`.xnote-plugins/` 每个子目录一个插件（plugin.json + main.js，ESM default 导出），Blob URL 动态 import；单插件损坏不影响其他；「设置 → 外部插件」查看状态 / 重载 / 移除 / 一键停用
-- [x] .zip 插件包安装：「设置 → 外部插件 → 安装 .zip 插件包」自动解压放入插件目录（含嵌套目录/覆盖安装/非法包校验）
-- [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装 / 更新 / 卸载，多源自动回退与强刷缓存；插件配置项独立在「插件设置」里；自建插件源只需一个公开仓库（见「插件系统」章节）
-- [x] 自动更新：基于 Tauri updater（minisign 签名校验 + latest.json 清单），「设置 → 自动更新」检查 / 下载 / 安装 / 重启，配置说明见「自动更新」章节
+- [x] 外部插件目录动态加载：`.xnote-plugins/` 每个子目录一个插件（plugin.json + main.js，ESM default 导出），Blob URL 动态 import；单插件损坏不影响其他；「插件 → 插件中心…」查看状态 / 重载目录 / 卸载 / 停用全部
+- [x] .zip 插件包安装：「插件 → 插件中心… → ⬆ 安装 .zip 插件包」自动解压放入插件目录（含嵌套目录/覆盖安装/非法包校验）
+- [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装 / 更新 / 卸载，默认源不可用自动切备用源、每次刷新绕过 CDN 缓存；插件配置项独立到「插件 → 插件设置…」；自建插件源只需一个公开仓库（见「插件系统」章节）
+- [x] 自动更新：基于 Tauri updater（minisign 签名校验 + latest.json 清单），GitHub / Gitee 双源回退，「设置 → 自动更新」检查 / 下载 / 安装 / 重启，配置说明见「自动更新」章节
 - [x] 官方外部插件：GitHub / Gitee Gist 备份、AI 写作助手、全库待办看板、批量查找替换、链接健康检查 + hello-world 样板（插件中心一键安装，源码在 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)）
 - [x] 关于：顶栏「关于」展示软件信息与开发者 XFM 主页（www.lovou.pw）与 GitHub（@xfm0797）
+- [x] 编辑菜单：撤销 / 重做（Ctrl+Z / Ctrl+Y）、全选、插入日期时间、转大写 / 小写、复制当前行、删除当前行、行上移 / 下移
+- [x] 搜索菜单：全文搜索（Ctrl+F）、跳转到指定行（Ctrl+G）
+- [x] 视图菜单：三种视图切换、字号放大 / 缩小 / 恢复（Ctrl+= / Ctrl+-）、显示侧栏、关系图谱
 - [x] 编辑器增强：
   - 格式工具条：加粗 / 斜体 / 删除线 / 行内代码 / H1–H3 / 链接 / 无序·有序·任务列表 / 引用 / 代码块
   - 快捷键：Ctrl+B 加粗、Ctrl+I 斜体、Tab 两空格缩进
@@ -243,7 +271,7 @@ ctx.ui.showDialog({
   - 本地文件夹镜像：Web 预览模式用 localStorage 模拟远端
   - Git 仓库：笔记库即工作树，fetch 远端后逐文件比对，本地改动统一 add/commit/push（仅桌面端，需 git）
 - 同步引擎单文件决策为纯函数（可单测）；冲突弹面板逐项选择「保留本地版 / 保留远端版 / 都保留」（本地版另存为 `xxx.conflict.md`）
-- 使用：顶栏「同步」一键同步；冲突时引导至「设置 → 云同步」裁决
+- 使用：顶栏「☁ 同步」或「插件 → 同步…」打开云同步面板，一键同步；冲突时在同一面板逐项裁决
 
 ### AI 写作助手（官方插件）
 
@@ -253,18 +281,33 @@ ctx.ui.showDialog({
 - **写回方式**：结果可先手动修改，再「替换选区 / 插入到光标 / 替换全文」（替换全文需二次确认）；标题标签模式下可分别「应用标题」（替换或插入 H1）与「应用标签」（写到标题下一行，已存在的自动跳过）
 - **隐私**：Key 只存在本机 localStorage（`xnote:plugin:ai-writer:cfg`），请求直接从你的电脑发往你填的接口，不经过任何中转
 
-### 外部插件目录（动态加载）
+### 外部插件（动态加载）
+
+外部插件是**无构建步骤的裸 ESM**（直接写 JS，不需要编译打包），放在笔记库的 `.xnote-plugins/` 下即可被加载。三种安装方式：
+
+| 方式 | 操作 | 适用场景 |
+| ---- | ---- | -------- |
+| 复制目录 | 插件目录放进 `<笔记库>/.xnote-plugins/` → 「插件 → 插件中心… → ↻ 重载目录」 | 本地开发调试 |
+| .zip 插件包 | 「插件 → 插件中心… → ⬆ 安装 .zip 插件包」 | 分发给别人 |
+| 插件中心 | 「插件 → 插件中心…」刷新列表 → 安装 / 更新 | 普通用户 |
 
 ```
 <笔记库>/.xnote-plugins/
-└── my-plugin/
-    ├── plugin.json     # { id, name, version, description?, main? }
-    └── main.js         # ESM，default 导出插件对象
+└── my-plugin/                # 目录名可自定义，建议与 manifest.id 一致
+    ├── plugin.json           # { id, name, version, description?, main? }
+    └── main.js               # 入口 ESM，default 导出插件对象
 ```
 
-启动与「重载插件目录」时自动扫描加载；单个插件损坏只影响自身，错误展示在「设置 → 外部插件」。安全提示：外部插件以应用的完整权限执行代码，请仅安装信任来源的插件。
+运行约束（踩坑点）：
 
-在外部插件中构建设置面板：不能 import 'react'，宿主把 React 挂在 `window.XNoteReact` 上，用 `createElement` + hooks 即可。
+- 入口经 **Blob URL 动态 import** 加载，因此 `main.js` 里**不能 `import './other.js'`** —— 相对路径会解析失败；多文件插件请自行打包成单文件
+- 不能 `import 'react'`，宿主把同一个 React 实例挂在 `window.XNoteReact`（用 `createElement` + hooks）
+- 不支持 JSX / TS，写的是浏览器直接能跑的 JS
+- `manifest.id` 是插件的身份标识（设置命名空间、命令归属、插件中心更新判断都按它），`manifest.version` 决定插件中心能否发现「可更新」
+
+启动时与点「重载目录」时自动扫描加载；单个插件损坏只影响自身，错误展示在「插件中心 → 已安装」列表里。安全提示：外部插件以应用的完整权限执行代码，请仅安装信任来源的插件。
+
+完整契约、示例与发布流程见 **[xnote-external-plugins/插件开发指南.md](./xnote-external-plugins/插件开发指南.md)**，样板插件见 `xnote-external-plugins/hello-world/`。
 
 ## 七、数据说明
 
@@ -272,11 +315,13 @@ ctx.ui.showDialog({
   - `.xnote-order.json`：文件树排序清单
   - `.xnote-history/`：版本历史快照（每篇一个 JSON，单篇上限 30 个）
   - `assets/`：粘贴 / 拖入的图片
-  - `.xnote-plugins/`：外部插件目录
+  - `.xnote-plugins/`：外部插件目录（每个插件一个子目录）
 - **浏览器预览模式**：数据保存在 localStorage，仅用于演示
 - **多窗口**：新窗口 URL 参数 `?note=路径&view=视图&sidebar=侧栏&sw=侧栏宽度`
 - **标签页**：sessionStorage（`xnote:tabs:session`）+ localStorage（`xnote:tabs:last`）
-- **插件配置**：localStorage（`xnote:plugin:<键>`）
+- **插件配置**：localStorage，键为 `xnote:plugin:<插件id>:<key>`（值为 JSON）
+- **插件中心源**：localStorage `xnote:market-url`；外部插件停用标记 `xnote:external-plugins-disabled`
+- **Web 模式的插件目录**：localStorage `xnote:external-plugins`（模拟 `.xnote-plugins/`）
 
 ## 八、自动更新（Tauri updater）
 
@@ -287,58 +332,67 @@ ctx.ui.showDialog({
 | 配置位置 | 配置项 | 当前值 / 说明 |
 | ---- | ---- | ---- |
 | `src-tauri/tauri.conf.json` | `bundle.createUpdaterArtifacts` | `true`——构建时生成更新产物及 `.sig` 签名文件 |
-| `src-tauri/tauri.conf.json` | `plugins.updater.pubkey` | minisign 公钥（与应用安装包内置一致，换钥需重新发版） |
-| `src-tauri/tauri.conf.json` | `plugins.updater.endpoints` | `https://github.com/xfm0797/X-Note/releases/latest/download/latest.json`——固定指向最新 Release 的清单文件 |
+| `src-tauri/tauri.conf.json` | `plugins.updater.pubkey` | minisign 公钥（与应用内置的一致，换钥需重新发版） |
+| `src-tauri/tauri.conf.json` | `plugins.updater.endpoints` | 两个源，按顺序尝试：① GitHub `.../releases/latest/download/latest.json` ② Gitee `https://gitee.com/xfm0797/x-note/raw/main/latest-cn.json`（国内直连备用，安装包走 Gitee Release） |
 | `src-tauri/Cargo.toml` | `tauri-plugin-updater` / `tauri-plugin-process` | 更新器与重启插件（Rust 侧） |
 | `src-tauri/capabilities/default.json` | `updater:default` / `process:allow-restart` | 前端调用更新 / 重启的权限 |
-| `.github/workflows/release.yml` | `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | **仓库 Secrets**（见下），CI 构建时用于签名 |
-| `scripts/gen-latest.mjs` | — | CI 在打 tag 构建后生成 `latest.json`（版本号、签名、安装包下载地址）并随 Release 上传 |
+| `src-tauri/Cargo.toml` · `package.json` | `version` | 应用版本；与 `tauri.conf.json` 三处必须一致 |
+| `scripts/gen-latest.mjs` | — | 打 tag 构建后扫描 bundle 生成 `latest.json`（GitHub 地址）与 `latest-cn.json`（Gitee 地址），签名取自 `.sig` 文件 |
+| `scripts/sync-gitee.sh` | — | 创建/复用 Gitee Release，上传安装包、`.sig`、`latest-cn.json`，并把 `latest-cn.json` 回写仓库 main 分支 |
+| `.github/workflows/release.yml` | `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` / `GITEE_TOKEN` | **仓库 Secrets**（见下）：签名 + Gitee 同步令牌 |
 
 ### 发版前的一次性配置（必须）
 
 1. 在 GitHub 仓库 `X-Note` → Settings → Secrets and variables → Actions → New repository secret：
    - Name：`TAURI_SIGNING_PRIVATE_KEY`，Value：私钥文件 `xnote.key` 的**完整内容**（含 untrusted comment 行和 base64 串；私钥不在仓库中，注意备份）
    - Name：`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，Value：私钥密码（当前密钥为空密码，填空即可；不建也可以，CI 会传空串）
-2. 未配置私钥时 CI 构建会在签名步骤失败（tauri build 检测到 `createUpdaterArtifacts: true` 但无签名密钥）。
+   - Name：`GITEE_TOKEN`，Value：Gitee 私人令牌（需 `projects` 权限，用于建 Release 与上传资产）
+2. 未配置签名私钥时 CI 构建会在签名步骤失败（`tauri build` 检测到 `createUpdaterArtifacts: true` 但无密钥）；未配置 `GITEE_TOKEN` 只影响 Gitee 备用源（该步骤 `continue-on-error`，GitHub 主发布照常完成）。
+3. Gitee 仓库需事先存在 `xfm0797/x-note`（公开），否则备用源与同步都会失败。
 
 ### 更新流程
 
-1. 改代码 → 把 3 个版本文件（`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`）升到新版本号
-2. `git tag v0.x.y && git push origin v0.x.y` → CI 构建 NSIS/MSI + 签名 → 生成 `latest.json` → 全部上传到 Release
-3. 已安装的用户在「设置 → 自动更新」点「检查更新」：应用从 endpoints 拉取 `latest.json`，比对版本号 → 下载安装包 → 公钥校验签名 → 安装 → 重启
+1. 改代码 → 把 4 个版本位置（`package.json`、`package-lock.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`，`Cargo.lock` 随构建自动更新）升到新版本号
+2. `git tag v0.x.y && git push origin v0.x.y` → CI 构建 NSIS/MSI + 签名 → 生成两份清单 → 发布 GitHub Release → 同步 Gitee Release 并回写 `latest-cn.json`
+3. 已安装的用户在「设置 → 自动更新」点「检查更新」：应用从 endpoints 拉取清单（GitHub 不通时用 Gitee）→ 比对版本号 → 下载安装包 → 公钥校验签名 → 安装 → 重启
+4. 若 Gitee 同步步骤失败：Actions 里手动跑 `sync-gitee.yml` 并填 tag 补一次即可（不会重复发 GitHub Release）
 
-### latest.json 格式
+### 更新清单格式（latest.json / latest-cn.json）
+
+两份结构完全一致，只有 `url` 指向的平台不同：
 
 ```json
 {
-  "version": "0.2.0",
-  "notes": "X-Note 0.2.0 更新。详情见 Release 页面。",
-  "pub_date": "2026-10-25T04:00:00.000Z",
+  "version": "0.4.0",
+  "notes": "X-Note 0.4.0 更新。详情见 Release 页面。",
+  "pub_date": "2026-10-27T13:47:49.761Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "<安装包 .sig 文件内容>",
-      "url": "https://github.com/xfm0797/X-Note/releases/download/v0.2.0/X-Note_0.2.0_x64-setup.exe"
+      "url": "https://github.com/xfm0797/X-Note/releases/download/v0.4.0/X-Note_0.4.0_x64-setup.exe"
     }
   }
 }
 ```
 
+`latest-cn.json` 仅把 `url` 换成 `https://gitee.com/xfm0797/x-note/releases/download/v0.4.0/X-Note_0.4.0_x64-setup.exe`。
+
 ## 九、插件中心与 .zip 插件包安装
 
 ### 安装 .zip 插件包
 
-「插件 → 插件中心 → ⬆ 安装 .zip 插件包」选择 zip 文件即可，应用自动完成：
-- 解压并定位 `plugin.json`（根目录或单个顶层目录包装均可）
+「插件 → 插件中心… → ⬆ 安装 .zip 插件包」选择 zip 文件即可，应用自动完成：
+- 解压并定位 `plugin.json`（根目录、单个顶层目录包装、任意深度的最浅一个均可）
 - 校验清单（缺 id/name 报错）与入口文件（`main` 字段或默认 `main.js`）
-- 桌面端解压写入 `<笔记库>/.xnote-plugins/<插件名>/`（同名插件覆盖更新）；Web 预览模式存入 localStorage 模拟目录
+- 桌面端解压写入 `<笔记库>/.xnote-plugins/<目录名>/`（同名插件覆盖更新，先删旧目录）；Web 预览模式只保存入口文件到 localStorage 模拟目录
 
 ### 插件中心（GitHub / Gitee 仓库作插件源）
 
 应用默认插件源为官方中心 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)（经 jsDelivr CDN 分发，国内访问友好）：
 `https://cdn.jsdelivr.net/gh/xfm0797/X-Note-Plugins@main/index.json`
 
-「插件 → 插件中心」刷新列表即可浏览官方插件并一键**安装 / 更新 / 卸载**：列表会标出「未安装 / 已是最新 / 可更新（已装 vX）」，
-已装插件在「已安装」分区也能直接卸载（删除 `<笔记库>/.xnote-plugins/<插件名>/`，不影响笔记内容）。
+「插件 → 插件中心…」刷新列表即可浏览官方插件并一键**安装 / 更新 / 卸载**：列表会标出「未安装 / 已是最新 / 可更新（已装 vX）」，
+已装插件在「已安装」分区也能直接卸载（删除 `<笔记库>/.xnote-plugins/<目录名>/`，不影响笔记内容），另有「↻ 重载目录」与「停用全部」两个应急开关。
 
 插件的配置项不在插件中心，走「插件 → 插件设置…」——只放各插件自己的 `registerSettingsPanel` 面板，装多了也不会把安装列表顶下去。
 
@@ -353,11 +407,13 @@ ctx.ui.showDialog({
        "zip": "https://gitee.com/<user>/<repo>/releases/download/v1/demo.zip" }
    ]
    ```
-   也支持对象格式 `{ "plugins": [...] }`。`zip` 地址可指向同一仓库的 Release 资产（推荐，可下大文件）或仓库内直接提交的 zip 的 raw 地址
+   也支持对象格式 `{ "plugins": [...] }`。字段：`id / name / version / zip` 必填，`description / author / homepage` 可选。`zip` 可指向同一仓库的 Release 资产（推荐，可下大文件）或仓库内直接提交的 zip 的 raw 地址
 3. 把插件按「外部插件目录」规范打好 zip 上传
-4. 应用内「插件 → 插件中心」填入 raw 索引地址（如 `https://gitee.com/<user>/<repo>/raw/main/index.json` 或 `https://raw.githubusercontent.com/<user>/<repo>/main/index.json`）→ 刷新列表 → 安装
+4. 应用内「插件 → 插件中心…」填入 raw 索引地址（如 `https://gitee.com/<user>/<repo>/raw/main/index.json` 或 `https://raw.githubusercontent.com/<user>/<repo>/main/index.json`）→ 保存源 → 刷新列表 → 安装
 
 注意事项：
+- **更新判断靠 `version`**：`index.json` 里的 `version` 高于本地 `plugin.json` 的 `version` 才会显示「可更新」，发新版必须同时改两处
+- 填了自建源但拉取失败时，应用会**自动回落到官方备用源**（Gitee raw → GitHub raw），此时列表里是官方插件而不是你的——看到列表来源 host 不对就说明自建源没通
 - Gitee raw 有访问频率限制且仓库必须公开，且**不返回 CORS 头**（所以只在桌面端可用，Web 预览模式会失败）
 - GitHub raw 在国内部分网络环境可能不稳定，可换用 jsDelivr CDN 镜像（`https://cdn.jsdelivr.net/gh/<user>/<repo>@main/index.json`）
 - CDN 会缓存索引（jsDelivr 默认 7 天），应用每次刷新都会加时间戳绕过缓存；自建源若也走 CDN，改完 index.json 记得刷新一次
