@@ -306,7 +306,7 @@ ctx.ui.showDialog({
 
 启动时与点「重载目录」时自动扫描加载；单个插件损坏只影响自身，错误展示在「插件中心 → 已安装」列表里。安全提示：外部插件以应用的完整权限执行代码，请仅安装信任来源的插件。
 
-完整契约与类型定义见 `src/plugins/types.ts`；插件样例、开发文档与打包发布流程见插件中心仓库 **[X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)**（`src/` 为源码，`plugins/*.zip` 为可安装包，`index.json` 为索引格式）。
+完整契约与类型定义见 `src/plugins/types.ts`；开发指南、插件样例与打包发布流程见插件中心仓库 **[X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)**（[插件开发指南](https://github.com/xfm0797/X-Note-Plugins/blob/main/%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91%E6%8C%87%E5%8D%97.md)；`src/` 为源码，`plugins/*.zip` 为可安装包，`index.json` 为索引格式）。
 
 ## 七、数据说明
 
