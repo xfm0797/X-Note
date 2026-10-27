@@ -298,7 +298,7 @@ export function compareVersion(a: string, b: string): number {
   return 0
 }
 
-/** Web 模式：演示插件源码（等价于 xnote-external-plugins/hello-world/main.js） */
+/** Web 模式：首次运行自动安装的演示插件源码 */
 const DEMO_PLUGIN_CODE = `export default {
   manifest: { id: 'hello-world', name: 'Hello World 样板', version: '1.0.0', description: '演示命令 + 设置面板 + storage 读写' },
   activate(ctx) {

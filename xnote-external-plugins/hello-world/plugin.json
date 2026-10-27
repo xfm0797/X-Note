@@ -1,6 +1,0 @@
-{
-  "id": "hello-world",
-  "name": "Hello World 样板",
-  "version": "1.0.0",
-  "description": "开发样板：命令 + 设置面板 + storage 读写 + 配置持久化的最小完整用法"
-}

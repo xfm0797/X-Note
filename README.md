@@ -7,7 +7,7 @@
 - **技术栈**：Tauri 2（Rust 外壳 + fs/dialog/shell/http/updater/process 插件）+ React 18 + TypeScript + Vite
 - **体积**：桌面安装包仅约数 MB（Rust 内核 + 系统 WebView2，无内嵌浏览器）
 - **开发者**：[XFM](https://www.lovou.pw) · GitHub [@xfm0797](https://github.com/xfm0797)
-- **核心特性**：Markdown 实时预览、本地笔记库与文件树、全文搜索、文档大纲、自动保存、导入/导出（PDF/HTML/MD）、亮/暗主题、设置面板、KaTeX 数学公式、Mermaid 流程图、双向链接 `[[笔记]]`、反链面板、关系图谱、标签分类、拖拽排序、插件系统（内置云同步插件【WebDAV / 本地镜像 / Git 后端 + 冲突解决面板】+ 外部插件目录动态加载，含 GitHub / Gitee Gist 备份、AI 写作助手等官方插件与 hello-world 开发样板及开发文档）、多窗口、版本历史与 diff 对比、多窗口布局记忆、标签页（可拖拽排序）、编辑器增强、关于（开发者 XFM）
+- **核心特性**：Markdown 实时预览、本地笔记库与文件树、全文搜索、文档大纲、自动保存、导入/导出（PDF/HTML/MD）、亮/暗主题、设置面板、KaTeX 数学公式、Mermaid 流程图、双向链接 `[[笔记]]`、反链面板、关系图谱、标签分类、拖拽排序、插件系统（内置云同步插件【WebDAV / 本地镜像 / Git 后端 + 冲突解决面板】+ 外部插件目录动态加载，插件中心可装可更新，官方插件含 GitHub / Gitee Gist 备份、AI 写作助手等）、多窗口、版本历史与 diff 对比、多窗口布局记忆、标签页（可拖拽排序）、编辑器增强、关于（开发者 XFM）
 
 ## 一、两种运行模式
 
@@ -149,7 +149,6 @@ X-Note/
 │   ├── build.rs
 │   ├── src/main.rs
 │   └── icons/
-├── xnote-external-plugins/      # 官方外部插件源码（github-gist / gitee-gist / hello-world + 开发指南）
 └── .github/workflows/           # release.yml（构建发布）/ sync-gitee.yml（备用源补救）
 ```
 
@@ -184,7 +183,7 @@ X-Note/
 - [x] .zip 插件包安装：「插件 → 插件中心… → ⬆ 安装 .zip 插件包」自动解压放入插件目录（含嵌套目录/覆盖安装/非法包校验）
 - [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装 / 更新 / 卸载，默认源不可用自动切备用源、每次刷新绕过 CDN 缓存；插件配置项独立到「插件 → 插件设置…」；自建插件源只需一个公开仓库（见「插件系统」章节）
 - [x] 自动更新：基于 Tauri updater（minisign 签名校验 + latest.json 清单），GitHub / Gitee 双源回退，「设置 → 自动更新」检查 / 下载 / 安装 / 重启，配置说明见「自动更新」章节
-- [x] 官方外部插件：GitHub / Gitee Gist 备份、AI 写作助手、全库待办看板、批量查找替换、链接健康检查 + hello-world 样板（插件中心一键安装，源码在 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)）
+- [x] 官方外部插件：GitHub / Gitee Gist 备份、AI 写作助手、全库待办看板、批量查找替换、链接健康检查 + hello-world 样板（插件中心一键安装，包与部分源码在 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)）
 - [x] 关于：顶栏「关于」展示软件信息与开发者 XFM 主页（www.lovou.pw）与 GitHub（@xfm0797）
 - [x] 编辑菜单：撤销 / 重做（Ctrl+Z / Ctrl+Y）、全选、插入日期时间、转大写 / 小写、复制当前行、删除当前行、行上移 / 下移
 - [x] 搜索菜单：全文搜索（Ctrl+F）、跳转到指定行（Ctrl+G）
@@ -307,7 +306,7 @@ ctx.ui.showDialog({
 
 启动时与点「重载目录」时自动扫描加载；单个插件损坏只影响自身，错误展示在「插件中心 → 已安装」列表里。安全提示：外部插件以应用的完整权限执行代码，请仅安装信任来源的插件。
 
-完整契约、示例与发布流程见 **[xnote-external-plugins/插件开发指南.md](./xnote-external-plugins/插件开发指南.md)**，样板插件见 `xnote-external-plugins/hello-world/`。
+完整契约与类型定义见 `src/plugins/types.ts`；插件样例、开发文档与打包发布流程见插件中心仓库 **[X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)**（`src/` 为源码，`plugins/*.zip` 为可安装包，`index.json` 为索引格式）。
 
 ## 七、数据说明
 

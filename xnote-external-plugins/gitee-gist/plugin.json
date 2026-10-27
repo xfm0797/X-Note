@@ -1,6 +1,0 @@
-{
-  "id": "gitee-gist",
-  "name": "Gitee 代码片段备份",
-  "version": "1.0.0",
-  "description": "笔记库一键备份到 Gitee 代码片段（扁平化存储 + 清单还原目录结构）"
-}
