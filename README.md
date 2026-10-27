@@ -157,7 +157,7 @@ xnote-external-plugins/          # 官方外部插件（github-gist / gitee-gist
 - [x] 标签页拖拽排序：拖拽调整顺序，顺序随标签状态持久化
 - [x] 外部插件目录动态加载：`.xnote-plugins/` 每个子目录一个插件（plugin.json + main.js，ESM default 导出），Blob URL 动态 import；单插件损坏不影响其他；「设置 → 外部插件」查看状态 / 重载 / 移除 / 一键停用
 - [x] .zip 插件包安装：「设置 → 外部插件 → 安装 .zip 插件包」自动解压放入插件目录（含嵌套目录/覆盖安装/非法包校验）
-- [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装；自建插件源只需一个公开仓库（见「插件系统」章节）
+- [x] 插件中心：可配置插件源（GitHub / Gitee 仓库的 index.json），列表展示 + 一键安装 / 更新 / 卸载，多源自动回退与强刷缓存；插件配置项独立在「插件设置」里；自建插件源只需一个公开仓库（见「插件系统」章节）
 - [x] 自动更新：基于 Tauri updater（minisign 签名校验 + latest.json 清单），「设置 → 自动更新」检查 / 下载 / 安装 / 重启，配置说明见「自动更新」章节
 - [x] 官方外部插件：GitHub / Gitee Gist 备份、AI 写作助手、全库待办看板、批量查找替换、链接健康检查 + hello-world 样板（插件中心一键安装，源码在 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)）
 - [x] 关于：顶栏「关于」展示软件信息与开发者 XFM 主页（www.lovou.pw）与 GitHub（@xfm0797）
@@ -208,7 +208,7 @@ interface XNotePlugin {
 | `ctx.editor` | 当前编辑器：`active() / getContent() / setContent() / getSelection() / replaceSelection() / insertText() / replaceRange() / select() / focus() / onChange()` |
 | `ctx.http` | 网络请求：`request() / postJSON() / getJSON()`（桌面端在 Rust 侧发出，不受 WebView CORS 限制） |
 | `ctx.settings` | 插件独立设置，按 `xnote:plugin:<插件id>:<key>` 命名空间隔离 |
-| `ctx.ui` | `registerCommand`（插件菜单项）/ `registerSettingsPanel`（插件中心面板）/ `showDialog`（插件自己的弹窗）/ `closeDialog` / `showToast` |
+| `ctx.ui` | `registerCommand`（插件菜单项）/ `registerSettingsPanel`（插件设置面板）/ `showDialog`（插件自己的弹窗）/ `closeDialog` / `showToast` |
 | `ctx.log` | 带插件 id 前缀的控制台日志 |
 
 `ctx.editor` 的写入走应用同一条自动保存与历史快照链路（用户可用 Ctrl+Z 撤销），因此插件不必自己写文件：
@@ -327,7 +327,7 @@ ctx.ui.showDialog({
 
 ### 安装 .zip 插件包
 
-「设置 → 外部插件 → ⬆ 安装 .zip 插件包」选择 zip 文件即可，应用自动完成：
+「插件 → 插件中心 → ⬆ 安装 .zip 插件包」选择 zip 文件即可，应用自动完成：
 - 解压并定位 `plugin.json`（根目录或单个顶层目录包装均可）
 - 校验清单（缺 id/name 报错）与入口文件（`main` 字段或默认 `main.js`）
 - 桌面端解压写入 `<笔记库>/.xnote-plugins/<插件名>/`（同名插件覆盖更新）；Web 预览模式存入 localStorage 模拟目录
@@ -337,11 +337,14 @@ ctx.ui.showDialog({
 应用默认插件源为官方中心 [X-Note-Plugins](https://github.com/xfm0797/X-Note-Plugins)（经 jsDelivr CDN 分发，国内访问友好）：
 `https://cdn.jsdelivr.net/gh/xfm0797/X-Note-Plugins@main/index.json`
 
-「设置 → 插件中心」刷新列表即可浏览官方插件（hello-world 样板、GitHub/Gitee Gist 备份）并一键安装。
+「插件 → 插件中心」刷新列表即可浏览官方插件并一键**安装 / 更新 / 卸载**：列表会标出「未安装 / 已是最新 / 可更新（已装 vX）」，
+已装插件在「已安装」分区也能直接卸载（删除 `<笔记库>/.xnote-plugins/<插件名>/`，不影响笔记内容）。
+
+插件的配置项不在插件中心，走「插件 → 插件设置…」——只放各插件自己的 `registerSettingsPanel` 面板，装多了也不会把安装列表顶下去。
 
 **自建插件中心**同样可行——插件中心就是一个「索引 + 插件包」的静态仓库：
 
-1. 新建公开仓库（GitHub 或 Gitee 均可，两者 raw 地址均支持浏览器跨域访问）
+1. 新建公开仓库（GitHub 或 Gitee 均可；桌面端索引与插件包都由 Rust 侧请求，不受 WebView 同源策略限制）
 2. 仓库根放 `index.json`：
    ```json
    [
@@ -352,9 +355,12 @@ ctx.ui.showDialog({
    ```
    也支持对象格式 `{ "plugins": [...] }`。`zip` 地址可指向同一仓库的 Release 资产（推荐，可下大文件）或仓库内直接提交的 zip 的 raw 地址
 3. 把插件按「外部插件目录」规范打好 zip 上传
-4. 应用内「设置 → 插件中心」填入 raw 索引地址（如 `https://gitee.com/<user>/<repo>/raw/main/index.json` 或 `https://raw.githubusercontent.com/<user>/<repo>/main/index.json`）→ 刷新列表 → 一键安装
+4. 应用内「插件 → 插件中心」填入 raw 索引地址（如 `https://gitee.com/<user>/<repo>/raw/main/index.json` 或 `https://raw.githubusercontent.com/<user>/<repo>/main/index.json`）→ 刷新列表 → 安装
 
-注意事项：Gitee raw 有访问频率限制且仓库必须公开；GitHub raw 在国内部分网络环境可能不稳定，可换用 jsDelivr CDN 镜像（`https://cdn.jsdelivr.net/gh/<user>/<repo>@main/index.json`，仅索引；zip 建议仍用 Release 地址）。
+注意事项：
+- Gitee raw 有访问频率限制且仓库必须公开，且**不返回 CORS 头**（所以只在桌面端可用，Web 预览模式会失败）
+- GitHub raw 在国内部分网络环境可能不稳定，可换用 jsDelivr CDN 镜像（`https://cdn.jsdelivr.net/gh/<user>/<repo>@main/index.json`）
+- CDN 会缓存索引（jsDelivr 默认 7 天），应用每次刷新都会加时间戳绕过缓存；自建源若也走 CDN，改完 index.json 记得刷新一次
 
 ### 后续可扩展
 
