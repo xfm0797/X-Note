@@ -87,6 +87,24 @@ export function removeExternalPlugin(dir: string) {
   writeDirStore(store)
 }
 
+/**
+ * 彻底卸载插件：删本地记录 + 桌面端删除 .xnote-plugins/<dir> 真实目录。
+ * 目录删不掉时抛错（比如被文件管理器占用），不会影响本地记录已清理的状态。
+ */
+export async function uninstallExternalPlugin(dir: string): Promise<void> {
+  removeExternalPlugin(dir)
+  if (!isTauri()) return
+  const fs = await import('@tauri-apps/plugin-fs')
+  const { getLibraryRoot } = await import('../lib/storage')
+  const root = await getLibraryRoot()
+  if (!root) return
+  try {
+    await fs.remove(`${root}/.xnote-plugins/${dir}`, { recursive: true })
+  } catch (e) {
+    throw new Error(`插件记录已清除，但目录删除失败：${String(e).replace(/^Error:\s*/, '')}（可手动删除 ${root}\\.xnote-plugins\\${dir}）`)
+  }
+}
+
 /* ---------- .zip 插件包安装 ---------- */
 
 export interface ZipInstallResult { dir: string; name: string; version: string; files: number }

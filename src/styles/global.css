@@ -414,6 +414,7 @@ body.dark .dlg-menu-item.danger { color: #f87171; }
 .market-meta { font-size: 11px; font-weight: 400; color: var(--text-secondary); margin-left: auto; }
 .ext-badge-ok { color: #16a34a; }
 .ext-badge-new { color: #2563eb; font-weight: 600; }
+.ext-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 .ext-desc { color: var(--text-secondary); font-size: 11px; }
 
 /* 插件自定义弹窗（ctx.ui.showDialog）：标题栏右侧关闭按钮，正文可纵向滚动 */

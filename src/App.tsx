@@ -20,6 +20,7 @@ import { AboutModal } from './components/AboutModal'
 import { HelpModal } from './components/HelpModal'
 import { SettingsModal } from './components/SettingsModal'
 import { PluginsModal } from './components/PluginsModal'
+import { PluginSettingsModal } from './components/PluginSettingsModal'
 import { SyncModal } from './components/SyncModal'
 import { DialogHost, askText, askConfirm, appToast } from './components/AskModal'
 import { PluginModal } from './components/PluginModal'
@@ -56,7 +57,7 @@ export default function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
   const [status, setStatus] = useState<'saved' | 'saving'>('saved')
-  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'about' | 'help' | 'plugin'>('none')
+  const [modal, setModal] = useState<'none' | 'graph' | 'history' | 'settings' | 'sync' | 'plugins' | 'pluginSettings' | 'about' | 'help' | 'plugin'>('none')
   const [scrollTarget, setScrollTarget] = useState<string | null>(null)
   const [, forceRender] = useState(0)
   // 插件
@@ -665,6 +666,7 @@ export default function App() {
         onOpenSettings={() => setModal('settings')}
         onOpenSync={() => setModal('sync')}
         onOpenPlugins={() => setModal('plugins')}
+        onOpenPluginSettings={() => setModal('pluginSettings')}
         onOpenAbout={() => setModal('about')}
         onOpenHelp={() => setModal('help')}
         onNewNote={() => { void createNote(active ? active.split('/').slice(0, -1).join('/') : '') }}
@@ -786,9 +788,15 @@ export default function App() {
       )}
       {modal === 'plugins' && (
         <PluginsModal
-          panels={pluginPanels}
           onReloadExternal={reloadExternal}
           onClose={() => setModal('none')}
+        />
+      )}
+      {modal === 'pluginSettings' && (
+        <PluginSettingsModal
+          panels={pluginPanels}
+          onClose={() => setModal('none')}
+          onOpenMarket={() => setModal('plugins')}
         />
       )}
       {modal === 'sync' && (

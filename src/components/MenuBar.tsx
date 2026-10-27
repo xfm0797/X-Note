@@ -19,6 +19,7 @@ interface Props {
   onOpenSettings(): void
   onOpenSync(): void
   onOpenPlugins(): void
+  onOpenPluginSettings(): void
   onOpenAbout(): void
   onOpenHelp(): void
   onNewNote(): void
@@ -122,6 +123,7 @@ export function MenuBar(p: Props) {
         {p.pluginCommands.map(c => item(c.title, c.run))}
         <div className="dropdown-sep" />
         {item('插件中心…', p.onOpenPlugins)}
+        {item('插件设置…', p.onOpenPluginSettings)}
         {item('同步…', p.onOpenSync)}
       </>)}
 
